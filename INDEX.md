@@ -26,6 +26,35 @@
 
 ---
 
+## 🎯 Getting Started Guides (Choose One)
+
+### **First Time? Xavier Restarted? Docker Not Running?**
+
+→ **[STARTUP.md](STARTUP.md)** ← **START HERE**
+
+Complete cold-boot guide (30-40 min):
+- ✅ System verification (power, USB connections, networking)
+- ✅ Docker daemon startup
+- ✅ Riva container pull & startup (speech engine)
+- ✅ Arduino serial verification (2 boards)
+- ✅ Audio device detection (microphone + speaker)
+- ✅ Python environment setup (dependencies, AWS credentials)
+- ✅ First run tests (text mode, then live voice)
+- ✅ Full troubleshooting reference (all common issues)
+
+**Time estimate:** 30-40 minutes for complete setup from power-on
+
+### **Returning User? Just a Daily Reboot?**
+
+→ **[QUICKSTART.md](QUICKSTART.md)** (2-5 min)
+
+Quick checklist for when Riva and hardware are already configured:
+- Verify Riva is running
+- Check speaker volume
+- Run orchestrator with voice or text mode
+
+---
+
 ## 🏗️ Software Architecture
 
 **Location:** `robot_sync_app/`
