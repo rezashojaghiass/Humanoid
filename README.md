@@ -7,15 +7,16 @@
 ## 📋 Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [System Architecture](#system-architecture)
-3. [Quick Start](#quick-start)
-4. [Hardware Setup](#hardware-setup)
-5. [Software Components](#software-components)
-6. [Integration Details](#integration-details)
-7. [Configuration Guide](#configuration-guide)
-8. [Usage Examples](#usage-examples)
-9. [Troubleshooting](#troubleshooting)
-10. [Cross-Repository References](#cross-repository-references)
+2. [What Runs Where (Important)](#what-runs-where-important)
+3. [System Architecture](#system-architecture)
+4. [Quick Start](#quick-start)
+5. [Hardware Setup](#hardware-setup)
+6. [Software Components](#software-components)
+7. [Integration Details](#integration-details)
+8. [Configuration Guide](#configuration-guide)
+9. [Usage Examples](#usage-examples)
+10. [Troubleshooting](#troubleshooting)
+11. [Cross-Repository References](#cross-repository-references)
 
 ---
 
@@ -32,6 +33,37 @@ This project unifies five specialized robot subsystems into a single voice-enabl
 | **LiDAR Autonomy** | [LidarUnitree](https://github.com/rezashojaghiass/LidarUnitree) | ROS2 point cloud, navigation | 🔄 Scaffolded |
 
 **Core Requirement:** When the robot speaks, hand gestures and facial expressions synchronize in real-time. Main arm servos are disabled by default (safety first), only fingers move.
+
+---
+
+## ✅ What Runs Where (Important)
+
+### Main application (run this from Xavier)
+
+- Python orchestrator entry point: `robot_sync_app/src/robot_sync_app/main.py`
+- This is the command you run each session.
+
+### Arduino firmware (uploaded separately)
+
+- Finger controller firmware: `arduino/finger_servos/finger_servos.ino`
+- Motor base firmware: `arduino/motor_base/motor_control.ino`
+
+### Critical clarification
+
+- Running the Python app **does not upload** Arduino code.
+- Arduino upload is a separate one-time action (or only when firmware changes).
+- Rebooting Xavier does **not erase** Arduino firmware.
+
+### When do you need Arduino upload again?
+
+- Only if you changed `.ino` files
+- Or replaced/reset an Arduino board
+
+### How to verify upload already exists
+
+- Run `examples/test_scripts/test_finger_serial.py`
+- Run `examples/test_scripts/test_motor_serial.py`
+- If both connect/respond, no upload is needed.
 
 ---
 
