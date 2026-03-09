@@ -32,7 +32,20 @@ PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
   --intent chat
 ```
 
-## 4) Safety check
+## 4) Auto-start Riva + continuous conversation mode
+
+```bash
+PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
+  --config robot_sync_app/config/config.yaml \
+  --voice \
+  --intent chat
+```
+
+Notes:
+- App auto-checks/starts Docker + Riva (using `riva_startup` config)
+- Conversation keeps running until you say: `QUIT`
+
+## 5) Safety check
 
 Keep this value:
 - `safety.enable_main_arms: false`
