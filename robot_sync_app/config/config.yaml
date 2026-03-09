@@ -1,0 +1,43 @@
+app:
+  loop_interval_ms: 20
+  default_kid_name: Adrian
+
+safety:
+  enable_main_arms: false
+
+storage:
+  backend: local
+  local_base_path: /mnt/nvme/adrian/robot_data
+  s3_bucket: your-future-bucket
+  s3_prefix: robot-data
+
+speech:
+  provider: riva
+  riva_server: localhost:50051
+  voice_name: English-US.Male-1
+  sample_rate_hz: 48000
+  output_device_index: 25
+
+llm:
+  provider: simple
+  aws_region: us-east-1
+  aws_model_id: us.meta.llama3-1-70b-instruct-v1:0
+
+gesture:
+  provider: arduino_serial
+  serial_port: /dev/ttyACM0
+  baud_rate: 115200
+  allowed_finger_gestures:
+    - fingers_wave
+    - fingers_point
+    - fingers_open
+    - fingers_close
+
+face:
+  provider: lcd_stub
+  default_expression: neutral
+  expressions:
+    - neutral
+    - happy
+    - thinking
+    - excited
