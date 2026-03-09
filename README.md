@@ -1,53 +1,78 @@
-# Humanoid Robot Software
+# 🤖 Humanoid - Voice-Enabled Humanoid Robot with Synchronized Gestures & Facial Expressions
 
-This repository contains the synchronized robot runtime application:
-- Speech (NVIDIA Riva TTS)
-- Finger gestures (Arduino over serial)
-- Face expressions (LCD adapter interface)
-
-> Safety-first default: **main arm servos are disabled**. Only finger gestures are allowed.
+**Complete integration of robot arm control, speech AI, LiDAR autonomy, and LCD facial animation into a single unified system.**
 
 ---
 
-## 1) Project layout
+## 📋 Table of Contents
 
-- `robot_sync_app/`
-  - `config/config.yaml` → runtime configuration
-  - `docs/API_CONTRACT.md` → Jetson↔Arduino message contract
-  - `src/robot_sync_app/` → clean architecture source code
-  - `requirements.txt` → Python dependencies
-
-Architecture layers:
-- `domain` → models/events
-- `ports` → interfaces
-- `application` → orchestration logic
-- `adapters` → infrastructure (Riva, serial, storage)
-- `bootstrap` → dependency wiring from config
+1. [Project Overview](#project-overview)
+2. [System Architecture](#system-architecture)
+3. [Quick Start](#quick-start)
+4. [Hardware Setup](#hardware-setup)
+5. [Software Components](#software-components)
+6. [Integration Details](#integration-details)
+7. [Configuration Guide](#configuration-guide)
+8. [Usage Examples](#usage-examples)
+9. [Troubleshooting](#troubleshooting)
+10. [Cross-Repository References](#cross-repository-references)
 
 ---
 
-## 2) Safety controls (important)
+## 🎯 Project Overview
 
-Open `robot_sync_app/config/config.yaml`:
+This project unifies five specialized robot subsystems into a single voice-enabled humanoid platform:
 
-- `safety.enable_main_arms: false`
+| Component | Repository | Purpose | Status |
+|-----------|-----------|---------|--------|
+| **Voice AI** | [ChatBotRobot](https://github.com/rezashojaghiass/ChatBotRobot) | ASR/TTS speech, Bedrock LLM, RAG | ✅ Integrated |
+| **Arm Control** | [RobotArmServos](https://github.com/rezashojaghiass/RobotArmServos) | Hand gestures, arm movements, servo control | ✅ Integrated |
+| **LCD Face** | [FacialAnimation](https://github.com/rezashojaghiass/FacialAnimation) | Buzz Lightyear facial expressions, lip-sync | 🔄 In Progress |
+| **Remote Access** | [VNC_Setup](https://github.com/rezashojaghiass/VNC_Setup) | Headless VNC for Xavier display | ✅ Configured |
+| **LiDAR Autonomy** | [LidarUnitree](https://github.com/rezashojaghiass/LidarUnitree) | ROS2 point cloud, navigation | 🔄 Scaffolded |
 
-With this value:
-- arm commands are blocked in the gesture adapter
-- only whitelisted finger gestures are accepted
-
-Allowed finger gestures are defined under:
-- `gesture.allowed_finger_gestures`
+**Core Requirement:** When the robot speaks, hand gestures and facial expressions synchronize in real-time. Main arm servos are disabled by default (safety first), only fingers move.
 
 ---
 
-## 3) Storage backends
+## 🏗️ System Architecture
 
-Current backend:
-- local NVMe path: `/mnt/nvme/adrian/robot_data`
-
-Configured in:
-- `storage.backend: local`
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    VOICE INPUT LAYER                         │
+│  Microphone (Wireless GO II @ 48kHz) ──► VAD Detection     │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│              SPEECH RECOGNITION (RIVA ASR)                  │
+│  Resamples 48kHz→16kHz ──► Riva gRPC ──► Text Output       │
+│  Network: localhost:50051 (Docker)                          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│         LANGUAGE UNDERSTANDING (AWS BEDROCK LLM)            │
+│  Text ──► Bedrock API ──► Llama 3.1 70B/8B or Claude 3.5   │
+│  Throttling: 1.5s cooldown, 10 retries with backoff         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+            ┌──────────────┼──────────────┐
+            │              │              │
+    ┌───────▼────┐  ┌─────▼──────┐ ┌────▼─────────┐
+    │ TTS (RIVA) │  │  GESTURES  │ │ FACIAL EXPR. │
+    │ 48kHz      │  │  Arduino   │ │ LCD Display  │
+    │ Speaker    │  │ Servo Ctrl │ │ Blender rigs │
+    │ USB Audio  │  │ /dev/ttyACM│ │ 30 frames    │
+    │ Device 25  │  │ 115200 bps │ │ per emotion  │
+    └────────────┘  └────────────┘ └──────────────┘
+            │              │              │
+            └──────────────┼──────────────┘
+                           │
+        ┌──────────────────▼──────────────────┐
+        │    OPTIONAL: LiDAR AUTONOMY (ROS2) │
+        │  Unitree L1 @ 4Hz ──► Navigation   │
+        │  (Scaffolded - future integration)  │
+        └───────────────────────────────────┘
+```
 - `storage.local_base_path: /mnt/nvme/adrian/robot_data`
 
 Future AWS switch:
