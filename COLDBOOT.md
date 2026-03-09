@@ -4,6 +4,8 @@
 **Time:** ~30-40 minutes start-to-finish  
 **Location:** `/home/reza/RobotArmServos/Humanoid`
 
+📍 Path map first: [XAVIER_PATHS.md](XAVIER_PATHS.md)
+
 ---
 
 ## Phase 1: System (5 min)
@@ -19,15 +21,17 @@ git status  # Verify repo synced
 # Start Docker
 sudo systemctl start docker
 
-# Pull Riva
-docker pull nvcr.io/nvidia/riva:latest
+# Check local Riva images first (skip pull if found)
+docker images --format '{{.Repository}}:{{.Tag}}' | grep -Ei 'riva-speech|nvidia/riva' || true
 
-# Start Riva (WAIT for "Accepting requests at port 50051")
-docker run --rm --gpus all -p 50051:50051 \
-  nvcr.io/nvidia/riva:latest riva_start.sh
+# Only if missing, pull:
+# docker pull nvcr.io/nvidia/riva/riva-speech:2.24.0-l4t-aarch64
 
-# Background it with: Ctrl+Z, then: bg
-# Then open NEW terminal for rest
+# Start Riva from existing Xavier script (preferred)
+cd /mnt/nvme/adrian/ChatBotRobot && ./scripts/start_riva.sh
+
+# Verify running
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'riva|speech' || true
 ```
 
 ## Phase 3: Hardware (10 min)
@@ -91,7 +95,7 @@ PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
 Ctrl+C
 
 # Stop Riva
-docker stop $(docker ps -q --filter ancestor=nvcr.io/nvidia/riva:latest)
+docker stop riva-speech riva-models-extract riva-models-download 2>/dev/null || true
 
 # Verify cleanup
 docker ps  # Should show no Riva

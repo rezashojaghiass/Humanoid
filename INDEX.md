@@ -32,6 +32,10 @@
 
 → **[STARTUP.md](STARTUP.md)** ← **START HERE**
 
+Before any install/download decisions, check:
+
+→ **[XAVIER_PATHS.md](XAVIER_PATHS.md)** (exact component locations on your Jetson)
+
 Complete cold-boot guide (30-40 min):
 - ✅ System verification (power, USB connections, networking)
 - ✅ Docker daemon startup

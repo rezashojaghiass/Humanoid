@@ -20,6 +20,14 @@ This guide assumes a fresh boot or clean state and takes you from nothing to a f
 
 ## Pre-Startup Checklist
 
+### Know your Xavier paths first (important)
+
+Before doing any install/pull actions, read:
+
+- [XAVIER_PATHS.md](XAVIER_PATHS.md)
+
+This tells you exactly where Riva, models, scripts, credentials, and project files live on your current Jetson.
+
 Before you begin, verify hardware is connected:
 
 ```bash
@@ -86,8 +94,17 @@ newgrp docker
 
 ### Step 2: Pull Latest Riva Container
 
+⚠️ **Do not pull first. Check first.**
+
 ```bash
-docker pull nvcr.io/nvidia/riva:latest
+# If you already see riva-speech images, skip docker pull
+docker images --format '{{.Repository}}:{{.Tag}}' | grep -Ei 'riva-speech|nvidia/riva' || true
+```
+
+Only if no Riva image is present:
+
+```bash
+docker pull nvcr.io/nvidia/riva/riva-speech:2.24.0-l4t-aarch64
 ```
 
 This downloads the speech recognition/synthesis engine (~8GB). May take 5-10 min depending on network.
@@ -101,11 +118,27 @@ ping 8.8.8.8
 
 ### Step 3: Start Riva Server
 
+Use your existing Xavier startup script first (preferred):
+
+```bash
+cd /mnt/nvme/adrian/ChatBotRobot
+./scripts/start_riva.sh
+```
+
+This script points to your local quickstart directory and local model repository:
+
+- `/mnt/nvme/adrian/riva/riva_quickstart_arm64_v2.19.0`
+- `/mnt/nvme/adrian/riva/riva_quickstart_arm64_v2.19.0/model_repository`
+
+Only use the generic `docker run` fallback if your script path is missing.
+
+Fallback command:
+
 ```bash
 # Start Riva on port 50051 with GPU support
 docker run --rm --gpus all \
   -p 50051:50051 \
-  nvcr.io/nvidia/riva:latest \
+  nvcr.io/nvidia/riva/riva-speech:2.24.0-l4t-aarch64 \
   riva_start.sh
 ```
 

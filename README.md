@@ -99,30 +99,27 @@ docker ps | grep riva-speech
 
 ---
 
-## 5) Installation
-
-From repo root:
-
-```bash
-
----
-
 ## ⚡ FIRST TIME SETUP?
 
 **👉 START HERE: [STARTUP.md](STARTUP.md)**
 
-This is a **complete cold-boot guide** for when you restart your Xavier with no Docker running. It covers:
-- ✅ System verification
-- ✅ Docker & Riva setup (ASR/TTS engine)
-- ✅ Hardware verification (Arduino, microphone, speaker)
-- ✅ Python environment setup
-- ✅ First run (text-mode, then live voice)
-- ✅ Full troubleshooting reference
+If you want exact on-device locations first (Riva path, model path, scripts, credentials), read:
 
-**Estimated time:** 30-40 minutes for complete setup
+**👉 [XAVIER_PATHS.md](XAVIER_PATHS.md)**
 
-Returning users → [QUICKSTART.md](QUICKSTART.md) (2 min daily checklist)
+This prevents unnecessary downloads and reinstall steps.
+
+Returning users → [QUICKSTART.md](QUICKSTART.md) (2-5 min checklist)
+
+---
+
+## 5) Installation (only if dependencies are missing)
+
+From repo root:
+
+```bash
 cd /path/to/Humanoid
+python3 -m pip install -r robot_sync_app/requirements.txt
 ```
 
 ---
