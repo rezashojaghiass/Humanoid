@@ -29,16 +29,16 @@ python examples/test_scripts/test_audio_devices.py
 
 Then update `config/config.yaml`:
 ```yaml
-audio:
-  microphone:
-    device_id: 25  # Wireless GO II (from device list)
-    sample_rate: 48000
-    channels: 1
-  
-  speaker:
-    device_id: 26  # KT USB Speaker
-    sample_rate: 48000
-    channels: 2
+speech:
+  # KT USB Speaker on this Xavier is usually index 25
+  # Re-check after reboot with test_audio_devices.py
+  output_device_index: 25
+  sample_rate_hz: 48000
+
+asr:
+  # Set mic index from test_audio_devices.py output (often Wireless GO II)
+  input_device_index: 8
+  sample_rate_hz: 48000
 ```
 
 ## Serial Port Configuration
