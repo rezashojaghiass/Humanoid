@@ -51,3 +51,17 @@ Keep this value:
 - `safety.enable_main_arms: false`
 
 This ensures fingers-only operation.
+
+
+## 6) Arm calibration mode
+
+Use the repo launcher:
+
+```bash
+./start_humanoid_calibration.sh
+```
+
+This uses `robot_sync_app/config/config.calibration.yaml` (with fallback to `config.yaml`).
+
+Riva note:
+- Use the v2.19 quickstart folder, configured for 2.14.0 images/models.

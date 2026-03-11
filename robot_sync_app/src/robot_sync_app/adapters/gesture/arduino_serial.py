@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 try:
     import serial
@@ -20,7 +20,7 @@ class ArduinoSerialGestureAdapter(GesturePort):
 
     ARM_PREFIXES = ("arm_", "l_sh", "r_sh", "l_elb", "r_elb")
 
-    def __init__(self, port: str, baud_rate: int, enable_main_arms: bool, allowed_finger_gestures: list[str]) -> None:
+    def __init__(self, port: str, baud_rate: int, enable_main_arms: bool, allowed_finger_gestures: List[str]) -> None:
         self._enable_main_arms = enable_main_arms
         self._allowed_fingers = set(allowed_finger_gestures)
         self._serial = None

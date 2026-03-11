@@ -47,3 +47,24 @@ PYTHONPATH=src python3 -m robot_sync_app.main --config config/config.yaml --text
 - `ArduinoSerialGestureAdapter` sends JSON lines over serial.
 - Replace `LCDStubFaceAdapter` with your real Jetson LCD drawing adapter.
 - Keep gesture names to allowed finger presets from config.
+
+
+## Arm calibration mode
+
+This mode uses a dedicated config file:
+- `config/config.calibration.yaml`
+
+It enables main arm controls for calibration:
+- `safety.enable_main_arms: true`
+
+From repository root:
+
+```bash
+./start_humanoid_calibration.sh
+```
+
+Expected behavior:
+- App speaks a greeting first
+- Then listens on microphone for commands
+
+If the calibration config is missing, the launcher falls back to `config/config.yaml`.

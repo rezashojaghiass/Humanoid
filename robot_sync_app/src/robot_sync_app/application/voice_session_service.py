@@ -23,6 +23,9 @@ class VoiceSessionService:
         turn = 0
         print("🎙️ Voice session started. Say 'QUIT' to end.")
 
+        greeting = "Hi Adrian, I am ready. What should we do?"
+        self._orchestrator.run_once(text=greeting, intent=intent)
+
         while True:
             if max_turns > 0 and turn >= max_turns:
                 print("✓ Reached max turns")

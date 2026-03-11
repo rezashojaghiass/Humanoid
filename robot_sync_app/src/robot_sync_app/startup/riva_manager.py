@@ -2,7 +2,7 @@ import shlex
 import socket
 import subprocess
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def _is_port_open(host: str, port: int, timeout_sec: float = 1.0) -> bool:
@@ -11,7 +11,7 @@ def _is_port_open(host: str, port: int, timeout_sec: float = 1.0) -> bool:
         return sock.connect_ex((host, port)) == 0
 
 
-def _run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
+def _run(cmd: List[str], check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=check, capture_output=True, text=True)
 
 

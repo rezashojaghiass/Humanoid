@@ -1,0 +1,68 @@
+app:
+  loop_interval_ms: 20
+  default_kid_name: Adrian
+
+safety:
+  enable_main_arms: true
+
+storage:
+  backend: local
+  local_base_path: /mnt/nvme/adrian/robot_data
+  s3_bucket: your-future-bucket
+  s3_prefix: robot-data
+
+speech:
+  provider: riva
+  riva_server: localhost:50051
+  voice_name: English-US.Male-1
+  sample_rate_hz: 48000
+  output_device_index: 25
+
+asr:
+  provider: riva_mic
+  riva_server: localhost:50051
+  sample_rate_hz: 16000
+  input_device_index: null
+  input_device_name_hint: Wireless GO II
+  max_duration_sec: 20
+  silence_threshold: 500
+  silence_duration_sec: 0.5
+
+llm:
+  provider: bedrock
+  aws_region: us-east-1
+  aws_model_id: us.meta.llama3-1-70b-instruct-v1:0
+  min_cooldown_sec: 1.5
+  system_prompt: |
+    You are Buzz Lightyear, speaking to Adrian.
+    Keep responses short (1-2 sentences), energetic, and kid-friendly.
+
+riva_startup:
+  enabled: true
+  host: localhost
+  port: 50051
+  ready_timeout_sec: 300
+  container_names:
+    - riva-speech
+    - riva-models-download
+    - riva-models-extract
+  start_command: cd /mnt/nvme/adrian/riva/riva_quickstart_arm64_v2.19.0 && bash riva_start.sh config.sh -s
+
+gesture:
+  provider: arduino_serial
+  serial_port: /dev/ttyACM0
+  baud_rate: 115200
+  allowed_finger_gestures:
+    - fingers_wave
+    - fingers_point
+    - fingers_open
+    - fingers_close
+
+face:
+  provider: lcd_stub
+  default_expression: neutral
+  expressions:
+    - neutral
+    - happy
+    - thinking
+    - excited
