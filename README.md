@@ -7,16 +7,17 @@
 ## 📋 Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [What Runs Where (Important)](#what-runs-where-important)
-3. [System Architecture](#system-architecture)
-4. [Quick Start](#quick-start)
-5. [Hardware Setup](#hardware-setup)
-6. [Software Components](#software-components)
-7. [Integration Details](#integration-details)
-8. [Configuration Guide](#configuration-guide)
-9. [Usage Examples](#usage-examples)
-10. [Troubleshooting](#troubleshooting)
-11. [Cross-Repository References](#cross-repository-references)
+2. [First-Page Run & Config (Conversation App)](#-first-page-run--config-conversation-app)
+3. [What Runs Where (Important)](#-what-runs-where-important)
+4. [System Architecture](#system-architecture)
+5. [Quick Start](#quick-start)
+6. [Hardware Setup](#hardware-setup)
+7. [Software Components](#software-components)
+8. [Integration Details](#integration-details)
+9. [Configuration Guide](#configuration-guide)
+10. [Usage Examples](#usage-examples)
+11. [Troubleshooting](#troubleshooting)
+12. [Cross-Repository References](#cross-repository-references)
 
 ---
 
@@ -35,6 +36,40 @@ This project unifies five specialized robot subsystems into a single voice-enabl
 **Core Requirement:** When the robot speaks, hand gestures and facial expressions synchronize in real-time. Main arm servos are disabled by default (safety first), only fingers move.
 
 ---
+
+## 🚀 First-Page Run & Config (Conversation App)
+
+Primary run command:
+
+```bash
+cd /mnt/nvme/RobotArmServos/Humanoid/robot_sync_app
+PYTHONPATH=src python3 -m robot_sync_app.main --config config/config.yaml --voice --intent chat
+```
+
+Primary config:
+- `robot_sync_app/config/config.yaml`
+
+Behavior summary:
+- Starts in conversation mode.
+- If movement intent is detected, it switches to the same calibration short-answer flow.
+- Saying `quit` / `chat mode` in movement flow returns to conversation.
+
+Movement entry phrases:
+- `movement mode`
+- `move mode`
+- `control mode`
+
+Short-answer movement pattern:
+- `left` / `right`
+- `elbow` / `shoulder 1` / `shoulder 2`
+- `up` / `down`
+- `some more` / `reverse` / `main menu` / `quit`
+
+Finger commands:
+- `fingers open`
+- `fingers close`
+- `fingers wave`
+- Side variants like `left fingers open`, `right fingers close`
 
 ## ✅ What Runs Where (Important)
 
