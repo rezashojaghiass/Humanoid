@@ -433,19 +433,46 @@ const int SERVO_MAX_US = 2400;
 const unsigned long ARM_STEP_MS = 500;
 
 bool talkOn = false;
-bool talkPhase = false;
-unsigned long lastTalkMs = 0;
-const unsigned long TALK_TOGGLE_MS = 140;
+unsigned long talkCycleStartMs = 0;
+unsigned long talkLastUpdateMs = 0;
+
+// Feb10 motion profile (arms only)
+const unsigned long TALK_L_ARM_UP_MS = 2000;
+const unsigned long TALK_L_ARM_PAUSE_MS = 180;
+const unsigned long TALK_L_ARM_DOWN_MS = 1570;
+
+const unsigned long TALK_R_ARM_UP_MS = 2000;
+const unsigned long TALK_R_ARM_PAUSE_MS = 180;
+const unsigned long TALK_R_ARM_DOWN_MS = 1900;
+
+const float TALK_L_SH1_SPEED = 1.00f;
+const float TALK_L_SH2_SPEED = 1.00f;
+const float TALK_R_SH1_SPEED = 1.25f;
+const float TALK_R_SH2_SPEED = 1.00f;
+
+const unsigned long TALK_UPDATE_MS = 20;
 
 int currentLElbUs = (L_ELB_OPEN_US + L_ELB_BEND_US) / 2;
 int currentRElbUs = (R_ELB_OPEN_US + R_ELB_BEND_US) / 2;
 int currentLSh2Us = L_SH2_NEUTRAL_US;
 int currentRSh2Us = R_SH2_NEUTRAL_US;
 
+String tokenAt(const String &src, char delim, int idx);
+
 int clampUs(int us) {
   if (us < SERVO_MIN_US) return SERVO_MIN_US;
   if (us > SERVO_MAX_US) return SERVO_MAX_US;
   return us;
+}
+
+int scaledPulse(int neutralUs, int targetUs, float factor) {
+  float delta = (float)(targetUs - neutralUs);
+  int out = (int)((float)neutralUs + delta * factor);
+  return clampUs(out);
+}
+
+int mixUs(int openUs, int closeUs, float ratio) {
+  return clampUs((int)(openUs + (closeUs - openUs) * ratio));
 }
 
 void powerOn(uint8_t pwrPin) {
@@ -459,11 +486,29 @@ void powerOff(uint8_t pwrPin) {
 }
 
 void setFingersOpen() {
+  // Right hand
   sThumb.writeMicroseconds(THUMB_OPEN);
   sIndex.writeMicroseconds(INDEX_OPEN);
   sMiddle.writeMicroseconds(MIDDLE_OPEN);
   sRing.writeMicroseconds(RING_OPEN);
   sPinky.writeMicroseconds(PINKY_OPEN);
+  // Left hand
+  sLThumb.writeMicroseconds(LTHUMB_OPEN);
+  sLIndex.writeMicroseconds(LINDEX_OPEN);
+  sLMiddle.writeMicroseconds(LMIDDLE_OPEN);
+  sLRing.writeMicroseconds(LRING_OPEN);
+  sLPinky.writeMicroseconds(LPINKY_OPEN);
+}
+
+void setRightFingersOpen() {
+  sThumb.writeMicroseconds(THUMB_OPEN);
+  sIndex.writeMicroseconds(INDEX_OPEN);
+  sMiddle.writeMicroseconds(MIDDLE_OPEN);
+  sRing.writeMicroseconds(RING_OPEN);
+  sPinky.writeMicroseconds(PINKY_OPEN);
+}
+
+void setLeftFingersOpen() {
   sLThumb.writeMicroseconds(LTHUMB_OPEN);
   sLIndex.writeMicroseconds(LINDEX_OPEN);
   sLMiddle.writeMicroseconds(LMIDDLE_OPEN);
@@ -472,16 +517,75 @@ void setFingersOpen() {
 }
 
 void setFingersClose() {
+  // Right hand
   sThumb.writeMicroseconds(THUMB_CLOSE);
   sIndex.writeMicroseconds(INDEX_CLOSE);
   sMiddle.writeMicroseconds(MIDDLE_CLOSE);
   sRing.writeMicroseconds(RING_CLOSE);
   sPinky.writeMicroseconds(PINKY_CLOSE);
+  // Left hand
   sLThumb.writeMicroseconds(LTHUMB_CLOSE);
   sLIndex.writeMicroseconds(LINDEX_CLOSE);
   sLMiddle.writeMicroseconds(LMIDDLE_CLOSE);
   sLRing.writeMicroseconds(LRING_CLOSE);
   sLPinky.writeMicroseconds(LPINKY_CLOSE);
+}
+
+void setRightFingersClose() {
+  sThumb.writeMicroseconds(THUMB_CLOSE);
+  sIndex.writeMicroseconds(INDEX_CLOSE);
+  sMiddle.writeMicroseconds(MIDDLE_CLOSE);
+  sRing.writeMicroseconds(RING_CLOSE);
+  sPinky.writeMicroseconds(PINKY_CLOSE);
+}
+
+void setLeftFingersClose() {
+  sLThumb.writeMicroseconds(LTHUMB_CLOSE);
+  sLIndex.writeMicroseconds(LINDEX_CLOSE);
+  sLMiddle.writeMicroseconds(LMIDDLE_CLOSE);
+  sLRing.writeMicroseconds(LRING_CLOSE);
+  sLPinky.writeMicroseconds(LPINKY_CLOSE);
+}
+
+void processFingerCmd(const String &line) {
+  String action = tokenAt(line, ':', 1);
+  String side = tokenAt(line, ':', 2);
+  action.trim(); side.trim();
+  action.toUpperCase(); side.toUpperCase();
+  if (side.length() == 0) side = "BOTH";
+
+  bool doRight = (side == "RIGHT" || side == "BOTH");
+  bool doLeft  = (side == "LEFT"  || side == "BOTH");
+  if (!doRight && !doLeft) {
+    Serial.println("ERR:FINGER:BAD_SIDE");
+    return;
+  }
+
+  if (action == "OPEN") {
+    if (doRight) setRightFingersOpen();
+    if (doLeft) setLeftFingersOpen();
+    Serial.println("ACK:FINGER:OPEN");
+    return;
+  }
+
+  if (action == "CLOSE") {
+    if (doRight) setRightFingersClose();
+    if (doLeft) setLeftFingersClose();
+    Serial.println("ACK:FINGER:CLOSE");
+    return;
+  }
+
+  if (action == "WAVE") {
+    if (doRight) setRightFingersClose();
+    if (doLeft) setLeftFingersClose();
+    delay(220);
+    if (doRight) setRightFingersOpen();
+    if (doLeft) setLeftFingersOpen();
+    Serial.println("ACK:FINGER:WAVE");
+    return;
+  }
+
+  Serial.println("ERR:FINGER:BAD_ACTION");
 }
 
 void neutralShouldersAndDetach() {
@@ -504,36 +608,100 @@ void setElbowsToCurrentAndDetach() {
 
 void startTalkingMotion() {
   talkOn = true;
-  talkPhase = false;
-  lastTalkMs = millis();
+  talkCycleStartMs = millis();
+  talkLastUpdateMs = 0;
   powerOn(L_ELB_PWR); sLElb.attach(L_ELB_PIN);
   powerOn(R_ELB_PWR); sRElb.attach(R_ELB_PIN);
+  powerOn(L_SH1_PWR); sLSh1.attach(L_SH1_PIN);
+  powerOn(R_SH1_PWR); sRSh1.attach(R_SH1_PIN);
+  powerOn(L_SH2_PWR); sLSh2.attach(L_SH2_PIN);
+  powerOn(R_SH2_PWR); sRSh2.attach(R_SH2_PIN);
+
+  sLSh1.writeMicroseconds(clampUs(L_SH1_NEUTRAL_US));
+  sRSh1.writeMicroseconds(clampUs(R_SH1_NEUTRAL_US));
+  sLSh2.writeMicroseconds(clampUs(L_SH2_NEUTRAL_US));
+  sRSh2.writeMicroseconds(clampUs(R_SH2_NEUTRAL_US));
+  sLElb.writeMicroseconds(clampUs(L_ELB_OPEN_US));
+  sRElb.writeMicroseconds(clampUs(R_ELB_OPEN_US));
 }
 
 void stopTalkingMotion() {
   talkOn = false;
-  setFingersOpen();
   sLElb.writeMicroseconds(clampUs(currentLElbUs));
   sRElb.writeMicroseconds(clampUs(currentRElbUs));
+  sLSh1.writeMicroseconds(clampUs(L_SH1_NEUTRAL_US));
+  sRSh1.writeMicroseconds(clampUs(R_SH1_NEUTRAL_US));
+  sLSh2.writeMicroseconds(clampUs(L_SH2_NEUTRAL_US));
+  sRSh2.writeMicroseconds(clampUs(R_SH2_NEUTRAL_US));
   delay(80);
-  sLElb.detach(); sRElb.detach();
-  powerOff(L_ELB_PWR); powerOff(R_ELB_PWR);
+  sLElb.detach(); sRElb.detach(); sLSh1.detach(); sRSh1.detach(); sLSh2.detach(); sRSh2.detach();
+  powerOff(L_ELB_PWR); powerOff(R_ELB_PWR); powerOff(L_SH1_PWR); powerOff(R_SH1_PWR); powerOff(L_SH2_PWR); powerOff(R_SH2_PWR);
 }
 
 void updateTalkingMotion() {
   if (!talkOn) return;
   unsigned long now = millis();
-  if (now - lastTalkMs < TALK_TOGGLE_MS) return;
-  lastTalkMs = now;
-  talkPhase = !talkPhase;
-  if (talkPhase) {
-    setFingersClose();
-    sLElb.writeMicroseconds(clampUs(currentLElbUs + 60));
-    sRElb.writeMicroseconds(clampUs(currentRElbUs + 60));
+  if (now - talkLastUpdateMs < TALK_UPDATE_MS) return;
+  talkLastUpdateMs = now;
+
+  unsigned long t = now - talkCycleStartMs;
+
+  const unsigned long L_UP_END = TALK_L_ARM_UP_MS;
+  const unsigned long L_PAUSE_END = L_UP_END + TALK_L_ARM_PAUSE_MS;
+  const unsigned long L_DOWN_END = L_PAUSE_END + TALK_L_ARM_DOWN_MS;
+
+  const unsigned long R_UP_END = TALK_R_ARM_UP_MS;
+  const unsigned long R_PAUSE_END = R_UP_END + TALK_R_ARM_PAUSE_MS;
+  const unsigned long R_DOWN_END = R_PAUSE_END + TALK_R_ARM_DOWN_MS;
+
+  const unsigned long ROUND_TOTAL = (L_DOWN_END > R_DOWN_END) ? L_DOWN_END : R_DOWN_END;
+
+  const int LSH1_UP_S = scaledPulse(L_SH1_NEUTRAL_US, L_SH1_UP_US, TALK_L_SH1_SPEED);
+  const int LSH1_DOWN_S = scaledPulse(L_SH1_NEUTRAL_US, L_SH1_DOWN_US, TALK_L_SH1_SPEED);
+  const int LSH2_UP_S = scaledPulse(L_SH2_NEUTRAL_US, L_SH2_UP_US, TALK_L_SH2_SPEED);
+  const int LSH2_DOWN_S = scaledPulse(L_SH2_NEUTRAL_US, L_SH2_DOWN_US, TALK_L_SH2_SPEED);
+
+  const int RSH1_UP_S = scaledPulse(R_SH1_NEUTRAL_US, R_SH1_UP_US, TALK_R_SH1_SPEED);
+  const int RSH1_DOWN_S = scaledPulse(R_SH1_NEUTRAL_US, R_SH1_DOWN_US, TALK_R_SH1_SPEED);
+  const int RSH2_UP_S = scaledPulse(R_SH2_NEUTRAL_US, R_SH2_UP_US, TALK_R_SH2_SPEED);
+  const int RSH2_DOWN_S = scaledPulse(R_SH2_NEUTRAL_US, R_SH2_DOWN_US, TALK_R_SH2_SPEED);
+
+  if (t < L_UP_END) {
+    sLSh1.writeMicroseconds(LSH1_UP_S);
+    sLSh2.writeMicroseconds(LSH2_UP_S);
+    sLElb.writeMicroseconds(L_ELB_OPEN_US);
+  } else if (t < L_PAUSE_END) {
+    sLSh1.writeMicroseconds(L_SH1_NEUTRAL_US);
+    sLSh2.writeMicroseconds(L_SH2_NEUTRAL_US);
+    sLElb.writeMicroseconds(L_ELB_OPEN_US);
+  } else if (t < L_DOWN_END) {
+    sLSh1.writeMicroseconds(LSH1_DOWN_S);
+    sLSh2.writeMicroseconds(LSH2_DOWN_S);
+    sLElb.writeMicroseconds(L_ELB_BEND_US);
   } else {
-    setFingersOpen();
-    sLElb.writeMicroseconds(clampUs(currentLElbUs - 60));
-    sRElb.writeMicroseconds(clampUs(currentRElbUs - 60));
+    sLSh1.writeMicroseconds(L_SH1_NEUTRAL_US);
+    sLSh2.writeMicroseconds(L_SH2_NEUTRAL_US);
+  }
+
+  if (t < R_UP_END) {
+    sRSh1.writeMicroseconds(RSH1_UP_S);
+    sRSh2.writeMicroseconds(RSH2_UP_S);
+    sRElb.writeMicroseconds(R_ELB_OPEN_US);
+  } else if (t < R_PAUSE_END) {
+    sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
+    sRSh2.writeMicroseconds(R_SH2_NEUTRAL_US);
+    sRElb.writeMicroseconds(R_ELB_OPEN_US);
+  } else if (t < R_DOWN_END) {
+    sRSh1.writeMicroseconds(RSH1_DOWN_S);
+    sRSh2.writeMicroseconds(RSH2_DOWN_S);
+    sRElb.writeMicroseconds(R_ELB_BEND_US);
+  } else {
+    sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
+    sRSh2.writeMicroseconds(R_SH2_NEUTRAL_US);
+  }
+
+  if (t >= ROUND_TOTAL) {
+    talkCycleStartMs = now;
   }
 }
 
@@ -662,6 +830,11 @@ void processArmCal(const String &line) {
 void processLine(String line) {
   line.trim();
   if (line.length() == 0) return;
+
+  if (line.startsWith("FINGER:")) {
+    processFingerCmd(line);
+    return;
+  }
 
   if (line.startsWith("ARM_CAL:")) {
     processArmCal(line);

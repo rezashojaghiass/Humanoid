@@ -19,6 +19,9 @@ class VoiceSessionService:
         self._llm = llm
         self._orchestrator = orchestrator
         self._storage = storage
+        self._chat_move_side: Optional[str] = None
+        self._chat_move_joint: Optional[str] = None
+        self._chat_last_cmd: Optional[Dict[str, Any]] = None
 
     def run(self, intent: str = "chat", max_turns: int = 0) -> None:
         if intent == "arm_calibration":
@@ -44,6 +47,20 @@ class VoiceSessionService:
                 print("👋 Ending voice session")
                 break
 
+            if self._is_movement_intent(user_text):
+                # Hybrid behavior: once movement intent is detected in chat,
+                # hand off to the exact calibration-style short-answer loop.
+                self._orchestrator.run_once(
+                    text="Switching to movement mode.",
+                    intent="arm_calibration",
+                )
+                self._run_arm_calibration(max_turns=0)
+                self._orchestrator.run_once(
+                    text="Back to chat mode.",
+                    intent="arm_calibration",
+                )
+                continue
+
             reply = self._llm.generate_reply(user_text=user_text, intent=intent)
             self._orchestrator.run_once(text=reply, intent=intent)
 
@@ -58,6 +75,169 @@ class VoiceSessionService:
                     "assistant_reply": reply,
                 },
             )
+
+    def _is_movement_intent(self, text: str) -> bool:
+        # Conservative detector: explicit movement phrases, structured arm/finger
+        # commands, or movement keywords trigger calibration-style mode.
+        t = " ".join(text.lower().strip().replace(".", " ").replace(",", " ").split())
+
+        if t in {"movement mode", "move mode", "control mode", "arm calibration", "calibration mode"}:
+            return True
+
+        if self._parse_arm_command(text) is not None:
+            return True
+
+        if self._parse_finger_command(text) is not None:
+            return True
+
+        movement_words = {"move", "movement", "arm", "elbow", "shoulder", "fingers", "finger", "hand", "hands", "reverse", "some more", "more", "main menu"}
+        return any(w in t for w in movement_words)
+
+    def _parse_finger_command(self, text: str) -> Optional[Dict[str, Any]]:
+        t = text.lower().strip()
+        if "finger" not in t and "fingers" not in t and "hand" not in t and "hands" not in t:
+            return None
+
+        action = None
+        if "open" in t:
+            action = "OPEN"
+        elif "close" in t:
+            action = "CLOSE"
+        elif "wave" in t:
+            action = "WAVE"
+
+        if not action:
+            return None
+
+        side = "BOTH"
+        if "left" in t:
+            side = "LEFT"
+        elif "right" in t:
+            side = "RIGHT"
+
+        return {"action": action, "side": side}
+
+    def _parse_chat_arm_command(self, text: str) -> Optional[Dict[str, Any]]:
+        cmd = self._parse_arm_command(text)
+        if cmd:
+            return cmd
+
+        t = text.lower().strip()
+        side = None
+        if "left" in t:
+            side = "LEFT"
+        elif "right" in t:
+            side = "RIGHT"
+
+        direction = None
+        if "up" in t or "raise" in t:
+            direction = "UP"
+        elif "down" in t or "lower" in t:
+            direction = "DOWN"
+
+        # Shortcut: "left arm up/down" maps to SHOULDER2.
+        if side and direction and (" arm" in f" {t}" or t.startswith("arm ")):
+            return {
+                "side": side,
+                "joint": "SHOULDER2",
+                "direction": direction,
+                "amount": 15,
+            }
+
+        return None
+
+    def _handle_chat_movement(self, user_text: str) -> Optional[str]:
+        t = user_text.lower().strip()
+        t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
+
+        if t_clean in {"movement mode", "move mode", "control mode"}:
+            self._chat_move_side = None
+            self._chat_move_joint = None
+            self._chat_last_cmd = None
+            return "Movement mode. Say left or right."
+
+        if t_clean in {"chat mode", "normal mode", "conversation mode"}:
+            self._chat_move_side = None
+            self._chat_move_joint = None
+            self._chat_last_cmd = None
+            return "Back to normal chat mode."
+
+        if t_clean in {"main menu", "menu", "reset"}:
+            self._chat_move_side = None
+            self._chat_move_joint = None
+            return "Movement menu. Say left, right, or fingers open close."
+
+        if t_clean in {"stop motion", "stop all", "freeze"}:
+            self._orchestrator.send_command("stop_all", {})
+            return "Stopped all movement."
+
+        finger = self._parse_finger_command(user_text)
+        if finger:
+            self._orchestrator.send_command("finger_command", finger)
+            action = str(finger["action"]).lower()
+            side = str(finger["side"]).lower()
+            return f"Done. Fingers {action} on {side}."
+
+        cmd = self._parse_chat_arm_command(user_text)
+        if cmd:
+            self._orchestrator.send_command("arm_calibration_step", cmd)
+            self._chat_move_side = str(cmd["side"])
+            self._chat_move_joint = str(cmd["joint"])
+            self._chat_last_cmd = dict(cmd)
+            return "Done. Say some more, reverse, main menu, or chat mode."
+
+        if t_clean in {"some more", "more"}:
+            if self._chat_last_cmd:
+                self._orchestrator.send_command("arm_calibration_step", self._chat_last_cmd)
+                return "Done."
+            return "No previous arm move. Say left or right."
+
+        if t_clean == "reverse":
+            if not self._chat_last_cmd:
+                return "No previous arm move."
+            rev = dict(self._chat_last_cmd)
+            rev["direction"] = "DOWN" if str(rev.get("direction")) == "UP" else "UP"
+            self._orchestrator.send_command("arm_calibration_step", rev)
+            self._chat_last_cmd = rev
+            return "Reversed."
+
+        if self._chat_move_side is None and t_clean in {"left", "right"}:
+            self._chat_move_side = "LEFT" if t_clean == "left" else "RIGHT"
+            return "Say elbow, shoulder one, or shoulder two."
+
+        if self._chat_move_side and self._chat_move_joint is None:
+            if "elbow" in t_clean or "elb" in t_clean:
+                self._chat_move_joint = "ELBOW"
+                return "Say up or down."
+            if "shoulder 1" in t_clean or "shoulder1" in t_clean or "shoulder one" in t_clean or t_clean in {"s1", "one", "1"}:
+                self._chat_move_joint = "SHOULDER1"
+                return "Say up or down."
+            if "shoulder 2" in t_clean or "shoulder2" in t_clean or "shoulder two" in t_clean or t_clean in {"s2", "two", "2", "to"}:
+                self._chat_move_joint = "SHOULDER2"
+                return "Say up or down."
+
+        if self._chat_move_side and self._chat_move_joint:
+            direction = None
+            if "up" in t_clean or "raise" in t_clean:
+                direction = "UP"
+            elif "down" in t_clean or "lower" in t_clean:
+                direction = "DOWN"
+
+            if direction:
+                cmd2 = {
+                    "side": self._chat_move_side,
+                    "joint": self._chat_move_joint,
+                    "direction": direction,
+                    "amount": 15,
+                }
+                self._orchestrator.send_command("arm_calibration_step", cmd2)
+                self._chat_last_cmd = dict(cmd2)
+                return "Done. Say some more, reverse, main menu, or chat mode."
+
+        if "move" in t_clean or "fingers" in t_clean or "shoulder" in t_clean or "elbow" in t_clean or "arm" in t_clean:
+            return "Movement command not clear. Try: left shoulder two down, or fingers open."
+
+        return None
 
     def _say(self, text: str) -> None:
         self._orchestrator.run_once(text=text, intent="arm_calibration")
@@ -99,7 +279,7 @@ class VoiceSessionService:
         }
 
     def _run_arm_calibration(self, max_turns: int = 0) -> None:
-        print("🎙️ Arm calibration session started. Say 'QUIT' to end.")
+        print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
         self._say("Main menu. Say left, right, or quit.")
 
@@ -119,11 +299,18 @@ class VoiceSessionService:
 
             t = user_text.lower().strip()
             t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
-            if t_clean in {"quit", "stop", "exit"}:
+            if t_clean in {"quit", "stop", "exit", "chat mode", "conversation mode", "normal mode"}:
                 self._orchestrator.send_command("stop_all", {})
-                self._say("Calibration ended.")
+                self._say("Calibration ended. Returning to chat mode.")
                 print("👋 Ending arm calibration")
                 break
+
+            finger = self._parse_finger_command(user_text)
+            if finger:
+                self._orchestrator.send_command("finger_command", finger)
+                self._say("Done. Say left, right, main menu, or quit.")
+                turn += 1
+                continue
 
             if "main menu" in t_clean or "menu" in t_clean or "enough" in t_clean:
                 last_cmd = None

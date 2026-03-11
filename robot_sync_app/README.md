@@ -5,14 +5,14 @@ This is a clean-architecture orchestrator for:
 - Finger gestures (Arduino)
 - Face expressions (LCD adapter)
 
-Main arm servos are safety-disabled by default.
+Main arm servos are enabled in chat config for hybrid chat + movement control.
 
 ## Safety
 
 In [config/config.yaml](config/config.yaml):
-- `safety.enable_main_arms: false`
+- `safety.enable_main_arms: true`
 
-This blocks arm-related gesture commands in the gesture adapter.
+This allows arm step commands from voice movement mode.
 
 ## Structure
 
@@ -41,6 +41,36 @@ From [robot_sync_app](.):
 pip3 install -r requirements.txt
 PYTHONPATH=src python3 -m robot_sync_app.main --config config/config.yaml --text "Hello Adrian, welcome to quiz time!" --intent quiz
 ```
+
+## Run conversation app (hybrid chat + movement)
+
+From [robot_sync_app](.):
+
+```bash
+PYTHONPATH=src python3 -m robot_sync_app.main --config config/config.yaml --voice --intent chat
+```
+
+What it does:
+- Starts normal conversation mode.
+- If movement intent is detected, it switches to the same short-answer flow used by calibration.
+- `quit` inside movement flow returns to chat mode.
+
+Movement entry phrases:
+- `movement mode`
+- `move mode`
+- `control mode`
+
+Movement short-answer pattern:
+- `left` / `right`
+- `elbow` / `shoulder 1` / `shoulder 2`
+- `up` / `down`
+- `some more` / `reverse` / `main menu` / `quit`
+
+Finger commands in movement flow:
+- `fingers open`
+- `fingers close`
+- `fingers wave`
+- side variants like `left fingers open`, `right fingers close`
 
 ## Notes
 

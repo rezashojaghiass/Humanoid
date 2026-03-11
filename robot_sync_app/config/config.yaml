@@ -3,7 +3,7 @@ app:
   default_kid_name: Adrian
 
 safety:
-  enable_main_arms: false
+  enable_main_arms: true
 
 storage:
   backend: local
