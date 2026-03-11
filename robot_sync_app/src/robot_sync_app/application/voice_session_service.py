@@ -74,9 +74,9 @@ class VoiceSessionService:
         joint = None
         if "elbow" in t or "elb" in t:
             joint = "ELBOW"
-        elif "shoulder 1" in t or "shoulder1" in t or "s1" in t or "first shoulder" in t:
+        elif "shoulder 1" in t or "shoulder1" in t or "shoulder one" in t or "s1" in t or "first shoulder" in t:
             joint = "SHOULDER1"
-        elif "shoulder 2" in t or "shoulder2" in t or "s2" in t or "second shoulder" in t:
+        elif "shoulder 2" in t or "shoulder2" in t or "shoulder two" in t or "s2" in t or "second shoulder" in t:
             joint = "SHOULDER2"
 
         direction = None
@@ -118,20 +118,21 @@ class VoiceSessionService:
                 continue
 
             t = user_text.lower().strip()
-            if t in {"quit", "stop", "exit"}:
+            t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
+            if t_clean in {"quit", "stop", "exit"}:
                 self._orchestrator.send_command("stop_all", {})
                 self._say("Calibration ended.")
                 print("👋 Ending arm calibration")
                 break
 
-            if "main menu" in t or "menu" in t or "enough" in t:
+            if "main menu" in t_clean or "menu" in t_clean or "enough" in t_clean:
                 last_cmd = None
                 side = None
                 joint = None
                 self._say("Main menu. Say left, right, or quit.")
                 continue
 
-            if "some more" in t or t == "more":
+            if "some more" in t_clean or t_clean == "more":
                 if not last_cmd:
                     self._say("No previous move. Main menu. Say left or right.")
                     continue
@@ -140,7 +141,7 @@ class VoiceSessionService:
                 turn += 1
                 continue
 
-            if "reverse" in t:
+            if "reverse" in t_clean:
                 if not last_cmd:
                     self._say("No previous move. Main menu. Say left or right.")
                     continue
@@ -165,10 +166,10 @@ class VoiceSessionService:
 
             # Guided short-answer flow
             if side is None:
-                if "left" in t:
+                if "left" in t_clean:
                     side = "LEFT"
                     self._say("Say elbow, shoulder one, or shoulder two.")
-                elif "right" in t:
+                elif "right" in t_clean:
                     side = "RIGHT"
                     self._say("Say elbow, shoulder one, or shoulder two.")
                 else:
@@ -176,13 +177,13 @@ class VoiceSessionService:
                 continue
 
             if joint is None:
-                if "elbow" in t or "elb" in t:
+                if "elbow" in t_clean or "elb" in t_clean:
                     joint = "ELBOW"
                     self._say("Say up or down.")
-                elif "shoulder 1" in t or "shoulder1" in t or "first shoulder" in t or t == "s1":
+                elif "shoulder 1" in t_clean or "shoulder1" in t_clean or "shoulder one" in t_clean or "first shoulder" in t_clean or t_clean in {"s1", "one", "1"}:
                     joint = "SHOULDER1"
                     self._say("Say up or down.")
-                elif "shoulder 2" in t or "shoulder2" in t or "second shoulder" in t or t == "s2":
+                elif "shoulder 2" in t_clean or "shoulder2" in t_clean or "shoulder two" in t_clean or "second shoulder" in t_clean or t_clean in {"s2", "two", "2", "to"}:
                     joint = "SHOULDER2"
                     self._say("Say up or down.")
                 else:
@@ -190,9 +191,9 @@ class VoiceSessionService:
                 continue
 
             direction = None
-            if "up" in t or "raise" in t:
+            if "up" in t_clean or "raise" in t_clean:
                 direction = "UP"
-            elif "down" in t or "lower" in t:
+            elif "down" in t_clean or "lower" in t_clean:
                 direction = "DOWN"
 
             if not direction:

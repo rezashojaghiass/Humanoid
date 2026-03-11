@@ -439,6 +439,8 @@ const unsigned long TALK_TOGGLE_MS = 140;
 
 int currentLElbUs = (L_ELB_OPEN_US + L_ELB_BEND_US) / 2;
 int currentRElbUs = (R_ELB_OPEN_US + R_ELB_BEND_US) / 2;
+int currentLSh2Us = L_SH2_NEUTRAL_US;
+int currentRSh2Us = R_SH2_NEUTRAL_US;
 
 int clampUs(int us) {
   if (us < SERVO_MIN_US) return SERVO_MIN_US;
@@ -578,6 +580,30 @@ void applyElbowStep(const String &side, const String &direction, int amount) {
 }
 
 void applyShoulderStep(const String &side, const String &joint, const String &direction) {
+  // SHOULDER2 is handled as positional-step to ensure visible calibration movement.
+  if (joint == "SHOULDER2") {
+    if (side == "LEFT") {
+      currentLSh2Us = (direction == "UP") ? L_SH2_UP_US : L_SH2_DOWN_US;
+
+      powerOn(L_SH2_PWR);
+      sLSh2.attach(L_SH2_PIN);
+      sLSh2.writeMicroseconds(clampUs(currentLSh2Us));
+      delay(ARM_STEP_MS);
+      sLSh2.detach();
+      powerOff(L_SH2_PWR);
+    } else {
+      currentRSh2Us = (direction == "UP") ? R_SH2_UP_US : R_SH2_DOWN_US;
+
+      powerOn(R_SH2_PWR);
+      sRSh2.attach(R_SH2_PIN);
+      sRSh2.writeMicroseconds(clampUs(currentRSh2Us));
+      delay(ARM_STEP_MS);
+      sRSh2.detach();
+      powerOff(R_SH2_PWR);
+    }
+    return;
+  }
+
   int target = 1500;
   if (side == "LEFT") {
     if (joint == "SHOULDER1") target = (direction == "UP") ? L_SH1_UP_US : L_SH1_DOWN_US;
