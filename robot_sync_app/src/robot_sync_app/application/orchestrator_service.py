@@ -34,10 +34,12 @@ class OrchestratorService:
 
         def on_start() -> None:
             self._face.set_expression(plan.face_expression)
-            self._gesture.start_gesture(plan.gesture_name)
+            if plan.gesture_name:
+                self._gesture.start_gesture(plan.gesture_name)
 
         def on_end() -> None:
-            self._gesture.stop_gesture(plan.gesture_name)
+            if plan.gesture_name:
+                self._gesture.stop_gesture(plan.gesture_name)
             self._face.set_expression(self._neutral)
 
         self._speech.speak(plan.speech_text, on_start=on_start, on_end=on_end)
@@ -53,3 +55,6 @@ class OrchestratorService:
                 "status": "done",
             },
         )
+
+    def send_command(self, name: str, params: Dict[str, Any]) -> None:
+        self._gesture.send_command(name=name, params=params)

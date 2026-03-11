@@ -1,3 +1,4 @@
+#if 0
 // ============================================================
 // FINGER SERVO CONTROL - Arduino #1 (Official)
 // ============================================================
@@ -355,5 +356,346 @@ void loop() {
     } else {
       t0 = now;
     }
+  }
+}
+#endif
+
+#include <Servo.h>
+
+// ===================== Finger pins =====================
+#define THUMB_PIN   2
+#define INDEX_PIN   3
+#define MIDDLE_PIN  4
+#define RING_PIN    5
+#define PINKY_PIN   6
+
+#define LTHUMB_PIN   7
+#define LINDEX_PIN   8
+#define LMIDDLE_PIN  9
+#define LRING_PIN    10
+#define LPINKY_PIN   11
+
+// ===================== Arm pins =====================
+#define L_SH1_PIN 17
+#define L_ELB_PIN 24
+#define L_SH2_PIN 25
+#define L_SH1_PWR 33
+#define L_ELB_PWR 34
+#define L_SH2_PWR 35
+
+#define R_SH1_PIN 14
+#define R_SH2_PIN 15
+#define R_ELB_PIN 16
+#define R_SH1_PWR 30
+#define R_SH2_PWR 31
+#define R_ELB_PWR 32
+
+Servo sThumb, sIndex, sMiddle, sRing, sPinky;
+Servo sLThumb, sLIndex, sLMiddle, sLRing, sLPinky;
+Servo sLSh1, sLSh2, sLElb;
+Servo sRSh1, sRSh2, sRElb;
+
+const int THUMB_OPEN  = 1500, THUMB_CLOSE  = 2300;
+const int INDEX_OPEN  = 2000, INDEX_CLOSE  = 700;
+const int MIDDLE_OPEN = 2000, MIDDLE_CLOSE = 700;
+const int RING_OPEN   = 2000, RING_CLOSE   = 700;
+const int PINKY_OPEN  = 2000, PINKY_CLOSE  = 700;
+
+const int LTHUMB_OPEN  = 1500, LTHUMB_CLOSE  = 740;
+const int LINDEX_OPEN  = INDEX_CLOSE,  LINDEX_CLOSE  = INDEX_OPEN;
+const int LMIDDLE_OPEN = MIDDLE_CLOSE, LMIDDLE_CLOSE = MIDDLE_OPEN;
+const int LRING_OPEN   = RING_CLOSE,   LRING_CLOSE   = RING_OPEN;
+const int LPINKY_OPEN  = PINKY_CLOSE,  LPINKY_CLOSE  = PINKY_OPEN;
+
+const int L_ELB_OPEN_US = 880;
+const int L_ELB_BEND_US = 1500;
+const int R_ELB_OPEN_US = 1200;
+const int R_ELB_BEND_US = 1800;
+
+const int L_SH1_DOWN_US = 700;
+const int L_SH1_NEUTRAL_US = 1370;
+const int L_SH1_UP_US = 1700;
+
+const int L_SH2_DOWN_US = 700;
+const int L_SH2_NEUTRAL_US = 1500;
+const int L_SH2_UP_US = 2300;
+
+const int R_SH1_DOWN_US = 1300;
+const int R_SH1_NEUTRAL_US = 1460;
+const int R_SH1_UP_US = 1900;
+
+const int R_SH2_DOWN_US = 600;
+const int R_SH2_NEUTRAL_US = 1460;
+const int R_SH2_UP_US = 2300;
+
+const int SERVO_MIN_US = 600;
+const int SERVO_MAX_US = 2400;
+const unsigned long ARM_STEP_MS = 500;
+
+bool talkOn = false;
+bool talkPhase = false;
+unsigned long lastTalkMs = 0;
+const unsigned long TALK_TOGGLE_MS = 140;
+
+int currentLElbUs = (L_ELB_OPEN_US + L_ELB_BEND_US) / 2;
+int currentRElbUs = (R_ELB_OPEN_US + R_ELB_BEND_US) / 2;
+
+int clampUs(int us) {
+  if (us < SERVO_MIN_US) return SERVO_MIN_US;
+  if (us > SERVO_MAX_US) return SERVO_MAX_US;
+  return us;
+}
+
+void powerOn(uint8_t pwrPin) {
+  pinMode(pwrPin, OUTPUT);
+  digitalWrite(pwrPin, HIGH);
+  delay(120);
+}
+
+void powerOff(uint8_t pwrPin) {
+  digitalWrite(pwrPin, LOW);
+}
+
+void setFingersOpen() {
+  sThumb.writeMicroseconds(THUMB_OPEN);
+  sIndex.writeMicroseconds(INDEX_OPEN);
+  sMiddle.writeMicroseconds(MIDDLE_OPEN);
+  sRing.writeMicroseconds(RING_OPEN);
+  sPinky.writeMicroseconds(PINKY_OPEN);
+  sLThumb.writeMicroseconds(LTHUMB_OPEN);
+  sLIndex.writeMicroseconds(LINDEX_OPEN);
+  sLMiddle.writeMicroseconds(LMIDDLE_OPEN);
+  sLRing.writeMicroseconds(LRING_OPEN);
+  sLPinky.writeMicroseconds(LPINKY_OPEN);
+}
+
+void setFingersClose() {
+  sThumb.writeMicroseconds(THUMB_CLOSE);
+  sIndex.writeMicroseconds(INDEX_CLOSE);
+  sMiddle.writeMicroseconds(MIDDLE_CLOSE);
+  sRing.writeMicroseconds(RING_CLOSE);
+  sPinky.writeMicroseconds(PINKY_CLOSE);
+  sLThumb.writeMicroseconds(LTHUMB_CLOSE);
+  sLIndex.writeMicroseconds(LINDEX_CLOSE);
+  sLMiddle.writeMicroseconds(LMIDDLE_CLOSE);
+  sLRing.writeMicroseconds(LRING_CLOSE);
+  sLPinky.writeMicroseconds(LPINKY_CLOSE);
+}
+
+void neutralShouldersAndDetach() {
+  powerOn(L_SH1_PWR); sLSh1.attach(L_SH1_PIN); sLSh1.writeMicroseconds(L_SH1_NEUTRAL_US);
+  powerOn(L_SH2_PWR); sLSh2.attach(L_SH2_PIN); sLSh2.writeMicroseconds(L_SH2_NEUTRAL_US);
+  powerOn(R_SH1_PWR); sRSh1.attach(R_SH1_PIN); sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
+  powerOn(R_SH2_PWR); sRSh2.attach(R_SH2_PIN); sRSh2.writeMicroseconds(R_SH2_NEUTRAL_US);
+  delay(120);
+  sLSh1.detach(); sLSh2.detach(); sRSh1.detach(); sRSh2.detach();
+  powerOff(L_SH1_PWR); powerOff(L_SH2_PWR); powerOff(R_SH1_PWR); powerOff(R_SH2_PWR);
+}
+
+void setElbowsToCurrentAndDetach() {
+  powerOn(L_ELB_PWR); sLElb.attach(L_ELB_PIN); sLElb.writeMicroseconds(clampUs(currentLElbUs));
+  powerOn(R_ELB_PWR); sRElb.attach(R_ELB_PIN); sRElb.writeMicroseconds(clampUs(currentRElbUs));
+  delay(120);
+  sLElb.detach(); sRElb.detach();
+  powerOff(L_ELB_PWR); powerOff(R_ELB_PWR);
+}
+
+void startTalkingMotion() {
+  talkOn = true;
+  talkPhase = false;
+  lastTalkMs = millis();
+  powerOn(L_ELB_PWR); sLElb.attach(L_ELB_PIN);
+  powerOn(R_ELB_PWR); sRElb.attach(R_ELB_PIN);
+}
+
+void stopTalkingMotion() {
+  talkOn = false;
+  setFingersOpen();
+  sLElb.writeMicroseconds(clampUs(currentLElbUs));
+  sRElb.writeMicroseconds(clampUs(currentRElbUs));
+  delay(80);
+  sLElb.detach(); sRElb.detach();
+  powerOff(L_ELB_PWR); powerOff(R_ELB_PWR);
+}
+
+void updateTalkingMotion() {
+  if (!talkOn) return;
+  unsigned long now = millis();
+  if (now - lastTalkMs < TALK_TOGGLE_MS) return;
+  lastTalkMs = now;
+  talkPhase = !talkPhase;
+  if (talkPhase) {
+    setFingersClose();
+    sLElb.writeMicroseconds(clampUs(currentLElbUs + 60));
+    sRElb.writeMicroseconds(clampUs(currentRElbUs + 60));
+  } else {
+    setFingersOpen();
+    sLElb.writeMicroseconds(clampUs(currentLElbUs - 60));
+    sRElb.writeMicroseconds(clampUs(currentRElbUs - 60));
+  }
+}
+
+int tokenIndex(const String &src, char delim, int idx) {
+  int found = 0;
+  int start = 0;
+  int len = src.length();
+  for (int i = 0; i <= len; i++) {
+    if (i == len || src[i] == delim) {
+      if (found == idx) return start;
+      found++;
+      start = i + 1;
+    }
+  }
+  return -1;
+}
+
+String tokenAt(const String &src, char delim, int idx) {
+  int start = tokenIndex(src, delim, idx);
+  if (start < 0) return "";
+  int i = start;
+  while (i < (int)src.length() && src[i] != delim) i++;
+  return src.substring(start, i);
+}
+
+void applyElbowStep(const String &side, const String &direction, int amount) {
+  int stepUs = constrain(amount, 1, 100) * 6;
+  int dir = (direction == "UP") ? 1 : -1;
+  if (side == "LEFT") {
+    int lo = min(L_ELB_OPEN_US, L_ELB_BEND_US);
+    int hi = max(L_ELB_OPEN_US, L_ELB_BEND_US);
+    currentLElbUs = constrain(currentLElbUs + dir * stepUs, lo, hi);
+    powerOn(L_ELB_PWR); sLElb.attach(L_ELB_PIN); sLElb.writeMicroseconds(currentLElbUs);
+    delay(ARM_STEP_MS);
+    sLElb.detach(); powerOff(L_ELB_PWR);
+  } else {
+    int lo = min(R_ELB_OPEN_US, R_ELB_BEND_US);
+    int hi = max(R_ELB_OPEN_US, R_ELB_BEND_US);
+    currentRElbUs = constrain(currentRElbUs + dir * stepUs, lo, hi);
+    powerOn(R_ELB_PWR); sRElb.attach(R_ELB_PIN); sRElb.writeMicroseconds(currentRElbUs);
+    delay(ARM_STEP_MS);
+    sRElb.detach(); powerOff(R_ELB_PWR);
+  }
+}
+
+void applyShoulderStep(const String &side, const String &joint, const String &direction) {
+  int target = 1500;
+  if (side == "LEFT") {
+    if (joint == "SHOULDER1") target = (direction == "UP") ? L_SH1_UP_US : L_SH1_DOWN_US;
+    if (joint == "SHOULDER2") target = (direction == "UP") ? L_SH2_UP_US : L_SH2_DOWN_US;
+    uint8_t pwr = (joint == "SHOULDER1") ? L_SH1_PWR : L_SH2_PWR;
+    uint8_t pin = (joint == "SHOULDER1") ? L_SH1_PIN : L_SH2_PIN;
+    Servo *s = (joint == "SHOULDER1") ? &sLSh1 : &sLSh2;
+    int neutral = (joint == "SHOULDER1") ? L_SH1_NEUTRAL_US : L_SH2_NEUTRAL_US;
+    powerOn(pwr); s->attach(pin); s->writeMicroseconds(clampUs(target));
+    delay(ARM_STEP_MS);
+    s->writeMicroseconds(clampUs(neutral));
+    delay(120);
+    s->detach(); powerOff(pwr);
+  } else {
+    if (joint == "SHOULDER1") target = (direction == "UP") ? R_SH1_UP_US : R_SH1_DOWN_US;
+    if (joint == "SHOULDER2") target = (direction == "UP") ? R_SH2_UP_US : R_SH2_DOWN_US;
+    uint8_t pwr = (joint == "SHOULDER1") ? R_SH1_PWR : R_SH2_PWR;
+    uint8_t pin = (joint == "SHOULDER1") ? R_SH1_PIN : R_SH2_PIN;
+    Servo *s = (joint == "SHOULDER1") ? &sRSh1 : &sRSh2;
+    int neutral = (joint == "SHOULDER1") ? R_SH1_NEUTRAL_US : R_SH2_NEUTRAL_US;
+    powerOn(pwr); s->attach(pin); s->writeMicroseconds(clampUs(target));
+    delay(ARM_STEP_MS);
+    s->writeMicroseconds(clampUs(neutral));
+    delay(120);
+    s->detach(); powerOff(pwr);
+  }
+}
+
+void processArmCal(const String &line) {
+  String side = tokenAt(line, ':', 1);
+  String joint = tokenAt(line, ':', 2);
+  String direction = tokenAt(line, ':', 3);
+  String amountStr = tokenAt(line, ':', 4);
+  side.trim(); joint.trim(); direction.trim(); amountStr.trim();
+  side.toUpperCase(); joint.toUpperCase(); direction.toUpperCase();
+  int amount = amountStr.toInt();
+  if (amount <= 0) amount = 15;
+
+  if ((side != "LEFT" && side != "RIGHT") || (direction != "UP" && direction != "DOWN")) {
+    Serial.println("ERR:ARM_CAL:BAD_ARGS");
+    return;
+  }
+  if (joint == "ELBOW") {
+    applyElbowStep(side, direction, amount);
+    Serial.println("ACK:ARM_CAL:ELBOW");
+    return;
+  }
+  if (joint == "SHOULDER1" || joint == "SHOULDER2") {
+    applyShoulderStep(side, joint, direction);
+    Serial.println("ACK:ARM_CAL:SHOULDER");
+    return;
+  }
+  Serial.println("ERR:ARM_CAL:BAD_JOINT");
+}
+
+void processLine(String line) {
+  line.trim();
+  if (line.length() == 0) return;
+
+  if (line.startsWith("ARM_CAL:")) {
+    processArmCal(line);
+    return;
+  }
+
+  if (line == "TALK_ON") {
+    startTalkingMotion();
+    Serial.println("ACK:TALK_ON");
+    return;
+  }
+  if (line == "TALK_OFF") {
+    stopTalkingMotion();
+    Serial.println("ACK:TALK_OFF");
+    return;
+  }
+
+  if (line.indexOf("\"type\": \"gesture_start\"") >= 0 || line.indexOf("\"type\":\"gesture_start\"") >= 0) {
+    startTalkingMotion();
+    Serial.println("ACK:GESTURE_START");
+    return;
+  }
+  if (line.indexOf("\"type\": \"gesture_stop\"") >= 0 || line.indexOf("\"type\":\"gesture_stop\"") >= 0) {
+    stopTalkingMotion();
+    Serial.println("ACK:GESTURE_STOP");
+    return;
+  }
+
+  if (line == "STOP_ALL" || line == "CAL_END") {
+    stopTalkingMotion();
+    neutralShouldersAndDetach();
+    setElbowsToCurrentAndDetach();
+    Serial.println("ACK:STOP_ALL");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  sThumb.attach(THUMB_PIN);
+  sIndex.attach(INDEX_PIN);
+  sMiddle.attach(MIDDLE_PIN);
+  sRing.attach(RING_PIN);
+  sPinky.attach(PINKY_PIN);
+  sLThumb.attach(LTHUMB_PIN);
+  sLIndex.attach(LINDEX_PIN);
+  sLMiddle.attach(LMIDDLE_PIN);
+  sLRing.attach(LRING_PIN);
+  sLPinky.attach(LPINKY_PIN);
+
+  setFingersOpen();
+  neutralShouldersAndDetach();
+  setElbowsToCurrentAndDetach();
+
+  Serial.println("READY:FINGER_SERVOS_WITH_ARM_CAL");
+}
+
+void loop() {
+  updateTalkingMotion();
+  if (Serial.available() > 0) {
+    String line = Serial.readStringUntil('\n');
+    processLine(line);
   }
 }

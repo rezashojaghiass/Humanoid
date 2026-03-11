@@ -64,7 +64,17 @@ From repository root:
 ```
 
 Expected behavior:
-- App speaks a greeting first
-- Then listens on microphone for commands
+- App runs a dedicated calibration dialogue with short answers:
+	- `left` / `right`
+	- `elbow` / `shoulder 1` / `shoulder 2`
+	- `up` / `down`
+	- `main menu` / `quit`
+- `some more` repeats the previous move.
+- `reverse` applies previous move in opposite direction.
+- `quit` ends calibration and sends a hard stop command to Arduino.
+
+Safety rules in this mode:
+- No finger gesture loop during calibration speech.
+- Arm steps are one-shot (`ARM_CAL`) and capped to 0.5s in Arduino firmware.
 
 If the calibration config is missing, the launcher falls back to `config/config.yaml`.

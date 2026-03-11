@@ -25,7 +25,7 @@ class RivaMicASRAdapter(ASRPort):
         self._input_device_name_hint = input_device_name_hint
         self._max_duration = max_duration_sec
         self._silence_threshold = silence_threshold
-        self._silence_duration = silence_duration_sec
+        self._silence_duration = max(0.5, silence_duration_sec)
         self._target_rate = sample_rate_hz
 
     def _resolve_input_device(self, p: pyaudio.PyAudio) -> Optional[int]:
@@ -75,7 +75,7 @@ class RivaMicASRAdapter(ASRPort):
             elif has_speech:
                 silence_frames += 1
 
-            if has_speech and silence_frames > silence_threshold_frames:
+            if has_speech and silence_frames >= silence_threshold_frames:
                 print("✓ Silence detected, stopping capture")
                 break
 
@@ -121,4 +121,6 @@ class RivaMicASRAdapter(ASRPort):
         text = self._transcribe(audio)
         if text:
             print(f"📝 User said: {text}")
+        else:
+            print("📝 User said: <no speech>")
         return text

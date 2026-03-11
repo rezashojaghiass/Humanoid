@@ -7,6 +7,13 @@ class BehaviorPlanner:
     def plan(self, utterance: Utterance) -> BehaviorPlan:
         text = utterance.text.lower()
 
+        if utterance.intent == "arm_calibration":
+            return BehaviorPlan(
+                speech_text=utterance.text,
+                gesture_name="",
+                face_expression="neutral",
+            )
+
         if "question" in text or utterance.intent == "quiz":
             return BehaviorPlan(
                 speech_text=utterance.text,

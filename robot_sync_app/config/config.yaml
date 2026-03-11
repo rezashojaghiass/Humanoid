@@ -16,7 +16,7 @@ speech:
   riva_server: localhost:50051
   voice_name: English-US.Male-1
   sample_rate_hz: 48000
-  output_device_index: 25
+  output_device_index: 1
 
 asr:
   provider: riva_mic

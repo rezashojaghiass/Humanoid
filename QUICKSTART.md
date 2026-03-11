@@ -65,3 +65,20 @@ This uses `robot_sync_app/config/config.calibration.yaml` (with fallback to `con
 
 Riva note:
 - Use the v2.19 quickstart folder, configured for 2.14.0 images/models.
+
+## 7) Calibration behavior contract (important)
+
+When running calibration, the expected behavior is:
+
+- Finger gestures are disabled in calibration prompts.
+- Main menu is short-answer guided:
+  - `left` / `right`
+  - `elbow` / `shoulder 1` / `shoulder 2`
+  - `up` / `down`
+  - `main menu` / `quit`
+- `some more` repeats last move.
+- `reverse` applies opposite direction of last move.
+- `quit` sends a hard stop command (`STOP_ALL`) to Arduino.
+- Arduino calibration move is one-shot and time-limited to 0.5s per step.
+
+Do not re-enable finger animation in calibration mode.

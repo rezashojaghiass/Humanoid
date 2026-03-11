@@ -11,7 +11,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Robot speech+gesture+face orchestrator")
     parser.add_argument("--config", default="config/config.yaml", help="Path to YAML config")
     parser.add_argument("--text", default="", help="Text to speak (text mode)")
-    parser.add_argument("--intent", default="chat", help="Intent label (chat|quiz)")
+    parser.add_argument("--intent", default="chat", help="Intent label (chat|quiz|arm_calibration)")
     parser.add_argument("--voice", action="store_true", help="Run conversation loop (mic->ASR->LLM->TTS)")
     parser.add_argument("--max-turns", type=int, default=0, help="Max turns for voice mode (0=infinite)")
     args = parser.parse_args()
