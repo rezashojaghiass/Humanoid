@@ -41,6 +41,14 @@ This project unifies five specialized robot subsystems into a single voice-enabl
 
 Primary run command:
 
+**Quick-start (from home folder):**
+
+```bash
+~/run_conversation_app.sh
+```
+
+Or manually from repo:
+
 ```bash
 cd /mnt/nvme/RobotArmServos/Humanoid/robot_sync_app
 PYTHONPATH=src python3 -m robot_sync_app.main --config config/config.yaml --voice --intent chat
