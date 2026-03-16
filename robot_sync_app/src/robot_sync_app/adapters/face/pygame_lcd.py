@@ -90,7 +90,7 @@ class PyGameLCDFaceAdapter(FacePort):
                 try:
                     img = Image.open(frame_file)
                     # Resize to display size if needed
-                    img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                    img = img.resize((self.width, self.height), Image.LANCZOS)
                     frames.append(img)
                 except Exception as e:
                     print(f"[FACE] Failed to load {frame_file}: {e}")
@@ -143,10 +143,12 @@ class PyGameLCDFaceAdapter(FacePort):
         # Play animation sequence
         frames = self.expressions[target_expr]
         for frame_idx, img in enumerate(frames):
+            # Ensure image is in RGB mode
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
             # Convert PIL image to pygame surface
-            data = img.tobytes()
-            size = img.size
-            surf = self.pygame.image.fromstring(data, size, "RGB")
+            surf = self.pygame.image.fromstring(img.tobytes(), img.size, "RGB")
             
             # Display frame on HDMI monitor
             self.screen.blit(surf, (0, 0))
