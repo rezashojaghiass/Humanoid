@@ -1,24 +1,29 @@
 import os
-from PIL import Image, ImageDraw
+import glob
+from pathlib import Path
+from PIL import Image
 from robot_sync_app.ports.face_port import FacePort
 
 
 class PyGameLCDFaceAdapter(FacePort):
-    """Renders facial expressions to HDMI display on Jetson Xavier.
+    """Renders animated facial expressions from Buzz Lightyear animation frames to HDMI display.
     
     Works with:
     - Physical HDMI monitor attached to Xavier
+    - Animated frame sequences (30 frames per expression)
     - Independent from VNC/headless connections
     """
 
-    def __init__(self, width: int = 1024, height: int = 768, fullscreen: bool = True):
+    def __init__(self, width: int = 1024, height: int = 768, fullscreen: bool = True, 
+                 assets_path: str = "/mnt/nvme/FacialAnimation/FacialExpressionBuzzLightYear"):
         """
-        Initialize the HDMI face display.
+        Initialize the HDMI face display with animated expressions.
         
         Args:
-            width: Display width in pixels (default 1024 for typical small HDMI monitors)
+            width: Display width in pixels (default 1024)
             height: Display height in pixels (default 768)
             fullscreen: Whether to run fullscreen on HDMI display
+            assets_path: Path to facial animation assets folder
         """
         try:
             import pygame
@@ -33,143 +38,130 @@ class PyGameLCDFaceAdapter(FacePort):
             self.width = width
             self.height = height
             self.fullscreen = fullscreen
+            self.assets_path = assets_path
             
             # Create display on HDMI monitor
             flags = pygame.FULLSCREEN if fullscreen else 0
             self.screen = pygame.display.set_mode((width, height), flags)
-            pygame.display.set_caption("Robot Face")
+            pygame.display.set_caption("Robot Face - Buzz Lightyear")
             
             # Fill with black initially
             self.screen.fill((0, 0, 0))
             pygame.display.flip()
             
+            # Load animation frames for each expression
+            self.expressions = self._load_animations()
+            
             self.running = True
-            self.current_expression = "neutral"
-            print(f"[FACE] HDMI Display initialized: {width}x{height} (fullscreen={fullscreen})")
+            self.current_expression = "Smile"
+            self.current_frame = 0
+            
+            print(f"[FACE] HDMI Display initialized: {width}x{height}")
+            print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
         except ImportError:
             print("[FACE] PyGame not available. Install with: pip install pygame")
             self.pygame = None
             self.screen = None
+            self.expressions = {}
         except Exception as e:
             print(f"[FACE] Failed to initialize HDMI display: {e}")
             self.pygame = None
             self.screen = None
+            self.expressions = {}
+
+    def _load_animations(self) -> dict:
+        """Load all animation frame sequences from assets folder."""
+        expressions = {}
+        
+        if not os.path.exists(self.assets_path):
+            print(f"[FACE] Assets path not found: {self.assets_path}")
+            return expressions
+        
+        for expr_dir in os.listdir(self.assets_path):
+            expr_path = os.path.join(self.assets_path, expr_dir)
+            if not os.path.isdir(expr_path):
+                continue
+            
+            # Load all frames for this expression
+            frames = []
+            frame_files = sorted(glob.glob(os.path.join(expr_path, "frame_*.png")))
+            
+            for frame_file in frame_files:
+                try:
+                    img = Image.open(frame_file)
+                    # Resize to display size if needed
+                    img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                    frames.append(img)
+                except Exception as e:
+                    print(f"[FACE] Failed to load {frame_file}: {e}")
+            
+            if frames:
+                expressions[expr_dir] = frames
+                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames")
+        
+        return expressions
+
 
     def set_expression(self, expression: str) -> None:
-        """Display the specified expression on HDMI monitor.
+        """Display the specified animated expression on HDMI monitor.
         
         Args:
-            expression: Expression name (e.g., 'happy', 'neutral', 'sad')
+            expression: Expression name (e.g., 'Smile', 'Sad', 'Surprise', 'AA', 'EE', 'OO')
         """
         print(f"[FACE] expression={expression}")
         
-        if not self.pygame or not self.screen:
+        if not self.pygame or not self.screen or not self.expressions:
             return
+        
+        # Map expression names to available animations
+        expr_map = {
+            "happy": "Smile",
+            "smile": "Smile",
+            "sad": "Sad",
+            "surprise": "Surprise",
+            "neutral": "Smile",  # Default to smile if no match
+            "aa": "AA",
+            "ee": "EE",
+            "oo": "OO",
+        }
+        
+        # Get the correct folder name
+        target_expr = expr_map.get(expression.lower(), expression)
+        
+        # Use target expression if available, otherwise use first available
+        if target_expr not in self.expressions:
+            available = list(self.expressions.keys())
+            if not available:
+                print(f"[FACE] No expressions loaded!")
+                return
+            target_expr = available[0]
+            print(f"[FACE] Expression '{expression}' not found, using '{target_expr}'")
+        
+        self.current_expression = target_expr
+        self.current_frame = 0
+        
+        # Play animation sequence
+        frames = self.expressions[target_expr]
+        for frame_idx, img in enumerate(frames):
+            # Convert PIL image to pygame surface
+            data = img.tobytes()
+            size = img.size
+            surf = self.pygame.image.fromstring(data, size, "RGB")
             
-        self.current_expression = expression.lower()
-        
-        # Create image with black background
-        img = Image.new('RGB', (self.width, self.height), color='black')
-        draw = ImageDraw.Draw(img)
-        
-        # Draw expression based on type
-        if self.current_expression == "happy":
-            self._draw_happy_face(draw)
-        elif self.current_expression == "sad":
-            self._draw_sad_face(draw)
-        elif self.current_expression == "neutral":
-            self._draw_neutral_face(draw)
-        else:
-            self._draw_neutral_face(draw)
-        
-        # Convert PIL image to pygame surface
-        data = img.tobytes()
-        size = img.size
-        surf = self.pygame.image.fromstring(data, size, "RGB")
-        
-        # Display on HDMI monitor
-        self.screen.blit(surf, (0, 0))
-        self.pygame.display.flip()
-        
-        # Handle pygame events (prevent window from freezing)
-        try:
-            for event in self.pygame.event.get():
-                if event.type == self.pygame.QUIT:
-                    self.running = False
-        except:
-            pass  # Ignore event errors
-
-    def _draw_happy_face(self, draw):
-        """Draw a happy face expression on HDMI display."""
-        cx, cy = self.width // 2, self.height // 2
-        face_radius = min(self.width, self.height) // 3
-        
-        # Face circle (yellow)
-        draw.ellipse(
-            [cx - face_radius, cy - face_radius, cx + face_radius, cy + face_radius],
-            outline='yellow', width=5, fill='yellow'
-        )
-        
-        # Left eye
-        eye_y = cy - face_radius // 3
-        draw.ellipse([cx - face_radius // 2 - 40, eye_y - 20, cx - face_radius // 2 - 10, eye_y + 20], fill='black')
-        
-        # Right eye
-        draw.ellipse([cx + face_radius // 2 + 10, eye_y - 20, cx + face_radius // 2 + 40, eye_y + 20], fill='black')
-        
-        # Happy mouth (arc)
-        mouth_y = cy + face_radius // 4
-        draw.arc(
-            [cx - face_radius // 3, mouth_y, cx + face_radius // 3, mouth_y + face_radius // 2],
-            0, 180, fill='black', width=5
-        )
-
-    def _draw_sad_face(self, draw):
-        """Draw a sad face expression on HDMI display."""
-        cx, cy = self.width // 2, self.height // 2
-        face_radius = min(self.width, self.height) // 3
-        
-        # Face circle (blue)
-        draw.ellipse(
-            [cx - face_radius, cy - face_radius, cx + face_radius, cy + face_radius],
-            outline='blue', width=5, fill='blue'
-        )
-        
-        # Left eye
-        eye_y = cy - face_radius // 3
-        draw.ellipse([cx - face_radius // 2 - 40, eye_y - 20, cx - face_radius // 2 - 10, eye_y + 20], fill='white')
-        
-        # Right eye
-        draw.ellipse([cx + face_radius // 2 + 10, eye_y - 20, cx + face_radius // 2 + 40, eye_y + 20], fill='white')
-        
-        # Sad mouth (upside down arc)
-        mouth_y = cy + face_radius // 4
-        draw.arc(
-            [cx - face_radius // 3, mouth_y - face_radius // 2, cx + face_radius // 3, mouth_y],
-            0, 180, fill='white', width=5
-        )
-
-    def _draw_neutral_face(self, draw):
-        """Draw a neutral face expression on HDMI display."""
-        cx, cy = self.width // 2, self.height // 2
-        face_radius = min(self.width, self.height) // 3
-        
-        # Face circle (white)
-        draw.ellipse(
-            [cx - face_radius, cy - face_radius, cx + face_radius, cy + face_radius],
-            outline='white', width=5, fill='white'
-        )
-        
-        # Left eye
-        eye_y = cy - face_radius // 3
-        draw.ellipse([cx - face_radius // 2 - 40, eye_y - 20, cx - face_radius // 2 - 10, eye_y + 20], fill='black')
-        
-        # Right eye
-        draw.ellipse([cx + face_radius // 2 + 10, eye_y - 20, cx + face_radius // 2 + 40, eye_y + 20], fill='black')
-        
-        # Neutral mouth (straight line)
-        mouth_y = cy + face_radius // 4
-        draw.line([cx - face_radius // 3, mouth_y, cx + face_radius // 3, mouth_y], fill='black', width=5)
+            # Display frame on HDMI monitor
+            self.screen.blit(surf, (0, 0))
+            self.pygame.display.flip()
+            
+            # Handle pygame events (prevent window from freezing)
+            try:
+                for event in self.pygame.event.get():
+                    if event.type == self.pygame.QUIT:
+                        self.running = False
+            except:
+                pass
+            
+            # Small delay between frames (~33ms for ~30fps)
+            self.pygame.time.delay(33)
 
     def cleanup(self):
         """Clean up pygame resources."""
