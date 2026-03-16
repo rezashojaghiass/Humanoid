@@ -31,7 +31,7 @@ class VoiceSessionService:
         turn = 0
         print("🎙️ Voice session started. Say 'QUIT' to end.")
 
-        greeting = f"Hi {self._config.get("app", {}).get("default_kid_name", "Reza")}, I am ready. What should we do?"
+        greeting = "Hi Reza, I am ready. What should we do?"
         self._orchestrator.run_once(text=greeting, intent=intent)
 
         while True:
@@ -43,7 +43,8 @@ class VoiceSessionService:
             if not user_text:
                 continue
 
-            if user_text.lower().strip() == "quit":
+            user_text_lower = user_text.lower().strip()
+            if "quit" in user_text_lower or "exit" in user_text_lower or "stop" in user_text_lower:
                 print("👋 Ending voice session")
                 break
 
