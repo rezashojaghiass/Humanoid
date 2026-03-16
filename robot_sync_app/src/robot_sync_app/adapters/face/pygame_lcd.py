@@ -89,6 +89,14 @@ class PyGameLCDFaceAdapter(FacePort):
             for frame_file in frame_files:
                 try:
                     img = Image.open(frame_file)
+                    
+                    # Rotate clockwise 90 degrees for all except Smile
+                    if expr_dir != "Smile":
+                        img = img.rotate(-90, expand=True)
+                    
+                    # Additional 180 degree rotation for all
+                    img = img.rotate(180)
+                    
                     # Resize to display size if needed
                     img = img.resize((self.width, self.height), Image.LANCZOS)
                     frames.append(img)
@@ -97,7 +105,8 @@ class PyGameLCDFaceAdapter(FacePort):
             
             if frames:
                 expressions[expr_dir] = frames
-                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames")
+                rotation_note = " (rotated 90° CW + 180°)" if expr_dir != "Smile" else " (rotated 180°)"
+                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames{rotation_note}")
         
         return expressions
 
