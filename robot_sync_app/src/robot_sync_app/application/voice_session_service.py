@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -33,6 +34,9 @@ class VoiceSessionService:
 
         greeting = "Hi Reza, I am ready. What should we do?"
         self._orchestrator.run_once(text=greeting, intent=intent)
+        
+        # Allow time for audio to settle and speaker to finish playing
+        time.sleep(1.0)
 
         while True:
             if max_turns > 0 and turn >= max_turns:
@@ -64,6 +68,9 @@ class VoiceSessionService:
 
             reply = self._llm.generate_reply(user_text=user_text, intent=intent)
             self._orchestrator.run_once(text=reply, intent=intent)
+            
+            # Allow time for audio to settle before next listen
+            time.sleep(0.5)
 
             turn += 1
             self._storage.put_json(
