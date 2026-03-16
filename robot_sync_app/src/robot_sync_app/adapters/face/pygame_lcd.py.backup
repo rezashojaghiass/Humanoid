@@ -1,0 +1,170 @@
+import os
+import glob
+from pathlib import Path
+from PIL import Image
+from robot_sync_app.ports.face_port import FacePort
+
+
+class PyGameLCDFaceAdapter(FacePort):
+    """Renders animated facial expressions from Buzz Lightyear animation frames to HDMI display.
+    
+    Works with:
+    - Physical HDMI monitor attached to Xavier
+    - Animated frame sequences (30 frames per expression)
+    - Independent from VNC/headless connections
+    """
+
+    def __init__(self, width: int = 1024, height: int = 768, fullscreen: bool = True, 
+                 assets_path: str = "/mnt/nvme/FacialAnimation/FacialExpressionBuzzLightYear"):
+        """
+        Initialize the HDMI face display with animated expressions.
+        
+        Args:
+            width: Display width in pixels (default 1024)
+            height: Display height in pixels (default 768)
+            fullscreen: Whether to run fullscreen on HDMI display
+            assets_path: Path to facial animation assets folder
+        """
+        try:
+            import pygame
+            self.pygame = pygame
+            
+            # Configure SDL to use the HDMI display, not VNC
+            os.environ['SDL_VIDEODRIVER'] = 'x11'
+            os.environ['DISPLAY'] = ':0'  # Direct X11 display, not VNC
+            
+            pygame.init()
+            
+            self.width = width
+            self.height = height
+            self.fullscreen = fullscreen
+            self.assets_path = assets_path
+            
+            # Create display on HDMI monitor
+            flags = pygame.FULLSCREEN if fullscreen else 0
+            self.screen = pygame.display.set_mode((width, height), flags)
+            pygame.display.set_caption("Robot Face - Buzz Lightyear")
+            
+            # Fill with black initially
+            self.screen.fill((0, 0, 0))
+            pygame.display.flip()
+            
+            # Load animation frames for each expression
+            self.expressions = self._load_animations()
+            
+            self.running = True
+            self.current_expression = "Smile"
+            self.current_frame = 0
+            
+            print(f"[FACE] HDMI Display initialized: {width}x{height}")
+            print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
+        except ImportError:
+            print("[FACE] PyGame not available. Install with: pip install pygame")
+            self.pygame = None
+            self.screen = None
+            self.expressions = {}
+        except Exception as e:
+            print(f"[FACE] Failed to initialize HDMI display: {e}")
+            self.pygame = None
+            self.screen = None
+            self.expressions = {}
+
+    def _load_animations(self) -> dict:
+        """Load all animation frame sequences from assets folder."""
+        expressions = {}
+        
+        if not os.path.exists(self.assets_path):
+            print(f"[FACE] Assets path not found: {self.assets_path}")
+            return expressions
+        
+        for expr_dir in os.listdir(self.assets_path):
+            expr_path = os.path.join(self.assets_path, expr_dir)
+            if not os.path.isdir(expr_path):
+                continue
+            
+            # Load all frames for this expression
+            frames = []
+            frame_files = sorted(glob.glob(os.path.join(expr_path, "frame_*.png")))
+            
+            for frame_file in frame_files:
+                try:
+                    img = Image.open(frame_file)
+                    # Resize to display size if needed
+                    img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                    frames.append(img)
+                except Exception as e:
+                    print(f"[FACE] Failed to load {frame_file}: {e}")
+            
+            if frames:
+                expressions[expr_dir] = frames
+                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames")
+        
+        return expressions
+
+
+    def set_expression(self, expression: str) -> None:
+        """Display the specified animated expression on HDMI monitor.
+        
+        Args:
+            expression: Expression name (e.g., 'Smile', 'Sad', 'Surprise', 'AA', 'EE', 'OO')
+        """
+        print(f"[FACE] expression={expression}")
+        
+        if not self.pygame or not self.screen or not self.expressions:
+            return
+        
+        # Map expression names to available animations
+        expr_map = {
+            "happy": "Smile",
+            "smile": "Smile",
+            "sad": "Sad",
+            "surprise": "Surprise",
+            "neutral": "Smile",  # Default to smile if no match
+            "aa": "AA",
+            "ee": "EE",
+            "oo": "OO",
+        }
+        
+        # Get the correct folder name
+        target_expr = expr_map.get(expression.lower(), expression)
+        
+        # Use target expression if available, otherwise use first available
+        if target_expr not in self.expressions:
+            available = list(self.expressions.keys())
+            if not available:
+                print(f"[FACE] No expressions loaded!")
+                return
+            target_expr = available[0]
+            print(f"[FACE] Expression '{expression}' not found, using '{target_expr}'")
+        
+        self.current_expression = target_expr
+        self.current_frame = 0
+        
+        # Play animation sequence
+        frames = self.expressions[target_expr]
+        for frame_idx, img in enumerate(frames):
+            # Convert PIL image to pygame surface
+            data = img.tobytes()
+            size = img.size
+            surf = self.pygame.image.fromstring(data, size, "RGB")
+            
+            # Display frame on HDMI monitor
+            self.screen.blit(surf, (0, 0))
+            self.pygame.display.flip()
+            
+            # Handle pygame events (prevent window from freezing)
+            try:
+                for event in self.pygame.event.get():
+                    if event.type == self.pygame.QUIT:
+                        self.running = False
+            except:
+                pass
+            
+            # Small delay between frames (~33ms for ~30fps)
+            self.pygame.time.delay(33)
+
+    def cleanup(self):
+        """Clean up pygame resources."""
+        if self.pygame:
+            self.pygame.quit()
+
