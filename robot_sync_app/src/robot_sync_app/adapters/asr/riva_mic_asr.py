@@ -29,16 +29,24 @@ class RivaMicASRAdapter(ASRPort):
         self._target_rate = sample_rate_hz
 
     def _resolve_input_device(self, p: pyaudio.PyAudio) -> Optional[int]:
+        # Try explicit device index first (highest priority)
         if self._input_device_index is not None:
+            print(f"✓ Using explicitly configured device index: {self._input_device_index}")
             return self._input_device_index
 
+        # Try to find by name hint (e.g., Wireless GO II)
         hint = self._input_device_name_hint.lower()
         for i in range(p.get_device_count()):
             info = p.get_device_info_by_index(i)
             if info.get("maxInputChannels", 0) > 0 and hint in info.get("name", "").lower():
                 print(f"✓ Found input device '{info['name']}' on index {i}")
                 return i
-        return None
+        
+        # Fallback to system default input device
+        print(f"⚠️ Device hint '{self._input_device_name_hint}' not found, using system default")
+        default_device = p.get_default_input_device_info()
+        print(f"✓ Using default input device: {default_device['name']} (index {default_device['index']})")
+        return default_device['index']
 
     def _record_with_vad(self) -> bytes:
         p = pyaudio.PyAudio()
@@ -60,8 +68,9 @@ class RivaMicASRAdapter(ASRPort):
         silence_frames = 0
         silence_threshold_frames = int(self._silence_duration * hw_rate / chunk)
         has_speech = False
+        grace_period_frames = int(3 * hw_rate / chunk)  # 3-second grace period before VAD activates
 
-        for _ in range(int(hw_rate / chunk * self._max_duration)):
+        for i in range(int(hw_rate / chunk * self._max_duration)):
             data = stream.read(chunk, exception_on_overflow=False)
             frames.append(data)
 
@@ -75,7 +84,8 @@ class RivaMicASRAdapter(ASRPort):
             elif has_speech:
                 silence_frames += 1
 
-            if has_speech and silence_frames >= silence_threshold_frames:
+            # Only check for silence-based auto-stop after grace period expires
+            if i >= grace_period_frames and has_speech and silence_frames >= silence_threshold_frames:
                 print("✓ Silence detected, stopping capture")
                 break
 

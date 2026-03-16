@@ -31,7 +31,7 @@ class VoiceSessionService:
         turn = 0
         print("🎙️ Voice session started. Say 'QUIT' to end.")
 
-        greeting = "Hi Adrian, I am ready. What should we do?"
+        greeting = f"Hi {self._config.get("app", {}).get("default_kid_name", "Reza")}, I am ready. What should we do?"
         self._orchestrator.run_once(text=greeting, intent=intent)
 
         while True:
