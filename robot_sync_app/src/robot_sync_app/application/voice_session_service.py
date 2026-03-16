@@ -96,18 +96,21 @@ class VoiceSessionService:
 
     def _parse_finger_command(self, text: str) -> Optional[Dict[str, Any]]:
         t = text.lower().strip()
-        if "finger" not in t and "fingers" not in t and "hand" not in t and "hands" not in t:
-            return None
-
-        action = None
-        if "open" in t:
-            action = "OPEN"
-        elif "close" in t:
-            action = "CLOSE"
-        elif "wave" in t:
+        
+        # Check for wave command first (can work standalone)
+        if "wave" in t:
             action = "WAVE"
-
-        if not action:
+        # Then check for finger/hand commands
+        elif "finger" in t or "fingers" in t or "hand" in t or "hands" in t:
+            action = None
+            if "open" in t:
+                action = "OPEN"
+            elif "close" in t:
+                action = "CLOSE"
+            
+            if not action:
+                return None
+        else:
             return None
 
         side = "BOTH"
