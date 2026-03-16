@@ -155,7 +155,7 @@ class VoiceSessionService:
             self._chat_move_side = None
             self._chat_move_joint = None
             self._chat_last_cmd = None
-            return "Movement mode. Say left or right."
+            return "Entering movement mode. You can say: wave, fingers open or close, left or right arm, stop motion, or chat mode to exit."
 
         if t_clean in {"chat mode", "normal mode", "conversation mode"}:
             self._chat_move_side = None
@@ -166,7 +166,7 @@ class VoiceSessionService:
         if t_clean in {"main menu", "menu", "reset"}:
             self._chat_move_side = None
             self._chat_move_joint = None
-            return "Movement menu. Say left, right, or fingers open close."
+            return "Movement menu. Available: wave, fingers open or close, left or right arm moves, stop motion, or chat mode to exit."
 
         if t_clean in {"stop motion", "stop all", "freeze"}:
             self._orchestrator.send_command("stop_all", {})
@@ -282,7 +282,7 @@ class VoiceSessionService:
     def _run_arm_calibration(self, max_turns: int = 0) -> None:
         print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
-        self._say("Main menu. Say left, right, or quit.")
+        self._say("Available commands: wave, fingers open or close, left or right arm moves, stop motion, some more, reverse, main menu, or quit to return to chat.")
 
         turn = 0
         last_cmd: Optional[Dict[str, Any]] = None
