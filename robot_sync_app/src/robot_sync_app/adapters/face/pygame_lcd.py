@@ -14,14 +14,14 @@ class PyGameLCDFaceAdapter(FacePort):
     - Independent from VNC/headless connections
     """
 
-    def __init__(self, width: int = 1024, height: int = 768, fullscreen: bool = True, 
+    def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
                  assets_path: str = "/mnt/nvme/FacialAnimation/FacialExpressionBuzzLightYear"):
         """
         Initialize the HDMI face display with animated expressions.
         
         Args:
-            width: Display width in pixels (default 1024)
-            height: Display height in pixels (default 768)
+            width: Display width in pixels (default 1280 for 8" HDMI monitor)
+            height: Display height in pixels (default 800 for 8" HDMI monitor)
             fullscreen: Whether to run fullscreen on HDMI display
             assets_path: Path to facial animation assets folder
         """
@@ -40,8 +40,9 @@ class PyGameLCDFaceAdapter(FacePort):
             self.fullscreen = fullscreen
             self.assets_path = assets_path
             
-            # Create display on HDMI monitor
-            flags = pygame.FULLSCREEN if fullscreen else 0
+            # Create display on HDMI monitor in fullscreen
+            # Use FULLSCREEN | pygame.HWSURFACE to bypass window manager
+            flags = pygame.FULLSCREEN | pygame.HWSURFACE
             self.screen = pygame.display.set_mode((width, height), flags)
             pygame.display.set_caption("Robot Face - Buzz Lightyear")
             
