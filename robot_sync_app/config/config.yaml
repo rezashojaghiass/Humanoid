@@ -59,10 +59,16 @@ gesture:
     - fingers_close
 
 face:
-  provider: lcd_stub
+  provider: pygame_lcd
+  width: 1024
+  height: 768
+  fullscreen: true
   default_expression: neutral
   expressions:
     - neutral
     - happy
+    - sad
+    - happy
+    - sad
     - thinking
     - excited
