@@ -46,6 +46,9 @@ class PyGameLCDFaceAdapter(FacePort):
             self.screen = pygame.display.set_mode((width, height), flags)
             pygame.display.set_caption("Robot Face - Buzz Lightyear")
             
+            # Hide mouse cursor for fullscreen display
+            pygame.mouse.set_visible(False)
+            
             # Fill with black initially
             self.screen.fill((0, 0, 0))
             pygame.display.flip()
