@@ -15,7 +15,7 @@ class PyGameLCDFaceAdapter(FacePort):
     """
 
     def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
-                 assets_path: str = "/mnt/nvme/FacialAnimation/FacialExpressionBuzzLightYear"):
+                 assets_path: str = "/home/reza/cropped_animation_frames"):
         """
         Initialize the HDMI face display with animated expressions.
         
@@ -94,12 +94,8 @@ class PyGameLCDFaceAdapter(FacePort):
                 try:
                     img = Image.open(frame_file)
                     
-                    # Rotate clockwise 90 degrees for all except Smile
-                    if expr_dir != "Smile":
-                        img = img.rotate(-90, expand=True)
-                    
-                    # Additional 180 degree rotation for all
-                    img = img.rotate(180)
+                    # Frames are already in correct orientation (cropped)
+                    # No rotation needed
                     
                     # Resize to display size if needed
                     img = img.resize((self.width, self.height), Image.LANCZOS)
@@ -109,8 +105,7 @@ class PyGameLCDFaceAdapter(FacePort):
             
             if frames:
                 expressions[expr_dir] = frames
-                rotation_note = " (rotated 90° CW + 180°)" if expr_dir != "Smile" else " (rotated 180°)"
-                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames{rotation_note}")
+                print(f"[FACE] Loaded '{expr_dir}': {len(frames)} frames (no rotation needed)")
         
         return expressions
 
