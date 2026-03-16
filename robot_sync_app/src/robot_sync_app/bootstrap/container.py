@@ -42,6 +42,7 @@ def build_orchestrator(config_path: str) -> OrchestratorService:
         voice_name=cfg["speech"]["voice_name"],
         sample_rate_hz=cfg["speech"]["sample_rate_hz"],
         output_device_index=cfg["speech"]["output_device_index"],
+        output_device_name_hint=cfg["speech"].get("output_device_name_hint", "KT USB Audio"),
     )
 
     gesture = ArduinoSerialGestureAdapter(
