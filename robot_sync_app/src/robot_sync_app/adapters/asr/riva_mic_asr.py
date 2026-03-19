@@ -127,10 +127,12 @@ class RivaMicASRAdapter(ASRPort):
         return final_text
 
     def listen_and_transcribe(self) -> str:
+        print(f"🔄 Recording audio...", flush=True)
         audio = self._record_with_vad()
+        print(f"✓ Recording complete ({len(audio)} bytes), transcribing...", flush=True)
         text = self._transcribe(audio)
         if text:
-            print(f"📝 User said: {text}")
+            print(f"📝 User said: {text}", flush=True)
         else:
-            print("📝 User said: <no speech>")
+            print("📝 User said: <no speech>", flush=True)
         return text

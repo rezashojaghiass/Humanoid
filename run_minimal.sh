@@ -23,4 +23,5 @@ fi
 echo "✓ Riva is up at localhost:50051"
 echo "📋 Running with MINIMAL config (no face, no servos)"
 cd /home/reza/Humanoid/robot_sync_app
-PYTHONPATH=src python3 -m robot_sync_app.main --config ../config_minimal.yaml --voice --intent chat
+# Run with unbuffered output (-u flag) for real-time logging
+PYTHONPATH=src python3 -u -m robot_sync_app.main --config ../config_minimal.yaml --voice --intent chat

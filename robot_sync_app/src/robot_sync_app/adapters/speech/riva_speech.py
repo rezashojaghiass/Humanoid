@@ -60,6 +60,7 @@ class RivaSpeechAdapter(SpeechPort):
 
     def speak(self, text: str, on_start: Callable[[], None], on_end: Callable[[], None]) -> None:
         logger.info(f"speak() called with text: {text[:50]}...")
+        print(f"🔊 TTS: Speaking... ({text[:40]}...)", flush=True)
         auth = riva.client.Auth(uri=self._server)
         tts = riva.client.SpeechSynthesisService(auth)
 
@@ -76,6 +77,7 @@ class RivaSpeechAdapter(SpeechPort):
                 voice_name=self._voice,
             )
             logger.info(f"Synthesis complete, got {len(resp.audio)} bytes")
+            print(f"✓ TTS synthesis complete: {len(resp.audio)} bytes", flush=True)
             
             p = pyaudio.PyAudio()
             logger.info(f"PyAudio initialized")
@@ -98,10 +100,12 @@ class RivaSpeechAdapter(SpeechPort):
             logger.info(f"Stream opened successfully")
             
             logger.info(f"Writing {len(resp.audio)} bytes to stream")
+            print(f"▶️  Playing audio ({len(resp.audio)} bytes)...", flush=True)
             stream.write(resp.audio)
             stream.stop_stream()
             stream.close()
             logger.info(f"Audio playback complete")
+            print(f"✓ Audio playback complete", flush=True)
         except Exception as e:
             logger.error(f"Error in speak(): {e}", exc_info=True)
             raise
