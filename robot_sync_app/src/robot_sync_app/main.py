@@ -1,5 +1,6 @@
 import argparse
 import logging
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -7,6 +8,19 @@ import yaml
 
 from robot_sync_app.bootstrap.container import build_orchestrator, build_voice_session
 from robot_sync_app.startup.riva_manager import ensure_riva_ready
+
+
+# Set multiprocessing to use 'fork' on systems that support it
+# This prevents module re-execution on ARM/Jetson
+if multiprocessing.get_start_method(allow_none=True) != 'fork':
+    try:
+        multiprocessing.set_start_method('fork', force=True)
+    except RuntimeError:
+        # Already set, or system doesn't support fork
+        try:
+            multiprocessing.set_start_method('spawn', force=True)
+        except:
+            pass  # Use system default
 
 
 def setup_logging():
@@ -51,7 +65,7 @@ def main() -> None:
 
     if not args.text.strip():
         raise ValueError("In text mode, --text is required. Or run with --voice.")
-
+    
     orchestrator.run_once(text=args.text, intent=args.intent)
 
 
