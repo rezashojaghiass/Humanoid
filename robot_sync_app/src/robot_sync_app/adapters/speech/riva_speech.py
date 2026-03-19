@@ -36,16 +36,18 @@ def find_output_device_by_name(target_name: str = "KT USB Audio") -> Optional[in
 
 
 class RivaSpeechAdapter(SpeechPort):
-    def __init__(self, server: str, voice_name: str, sample_rate_hz: int, output_device_index: int = 0) -> None:
-        logger.info(f"Initializing RivaSpeechAdapter: server={server}, voice={voice_name}, rate={sample_rate_hz}, device={output_device_index}")
+    def __init__(self, server: str, voice_name: str, sample_rate_hz: int, output_device_index: Optional[int] = None, output_device_name_hint: str = "KT USB Audio") -> None:
+        logger.info(f"Initializing RivaSpeechAdapter: server={server}, voice={voice_name}, rate={sample_rate_hz}, device={output_device_index}, hint={output_device_name_hint}")
         self._server = server
         self._voice = voice_name
         self._rate = sample_rate_hz
+        self._output_device_index = output_device_index
+        self._output_device_name_hint = output_device_name_hint
         
-        # Auto-detect KT USB Audio speaker if device index is invalid (0 or None)
-        if output_device_index is None or output_device_index == 0:
-            logger.info(f"Device index {output_device_index} is invalid, auto-detecting...")
-            detected = find_output_device_by_name("KT USB Audio")
+        # Auto-detect output device if index is None
+        if output_device_index is None:
+            logger.info(f"Device index is None, auto-detecting using hint: {output_device_name_hint}")
+            detected = find_output_device_by_name(output_device_name_hint)
             if detected is not None:
                 self._out = detected
                 logger.info(f"Auto-detected KT USB Audio speaker at device {detected}")

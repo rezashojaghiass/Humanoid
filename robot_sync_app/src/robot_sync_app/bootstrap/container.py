@@ -10,6 +10,7 @@ from robot_sync_app.adapters.asr.riva_mic_asr import RivaMicASRAdapter
 from robot_sync_app.adapters.face.lcd_stub import LCDStubFaceAdapter
 from robot_sync_app.adapters.face.pygame_lcd import PyGameLCDFaceAdapter
 from robot_sync_app.adapters.gesture.arduino_serial import ArduinoSerialGestureAdapter
+from robot_sync_app.adapters.gesture.stub_gesture import StubGestureAdapter
 from robot_sync_app.adapters.llm.bedrock_llm import BedrockLLMAdapter
 from robot_sync_app.adapters.llm.simple_llm import SimpleLLMAdapter
 from robot_sync_app.adapters.speech.riva_speech import RivaSpeechAdapter
@@ -45,12 +46,17 @@ def build_orchestrator(config_path: str) -> OrchestratorService:
         output_device_name_hint=cfg["speech"].get("output_device_name_hint", "KT USB Audio"),
     )
 
-    gesture = ArduinoSerialGestureAdapter(
-        port=cfg["gesture"]["serial_port"],
-        baud_rate=cfg["gesture"]["baud_rate"],
-        enable_main_arms=cfg["safety"]["enable_main_arms"],
-        allowed_finger_gestures=cfg["gesture"]["allowed_finger_gestures"],
-    )
+    # Initialize gesture adapter based on config
+    gesture_provider = cfg["gesture"].get("provider", "arduino_serial")
+    if gesture_provider == "arduino_serial":
+        gesture = ArduinoSerialGestureAdapter(
+            port=cfg["gesture"]["serial_port"],
+            baud_rate=cfg["gesture"]["baud_rate"],
+            enable_main_arms=cfg["safety"]["enable_main_arms"],
+            allowed_finger_gestures=cfg["gesture"]["allowed_finger_gestures"],
+        )
+    else:
+        gesture = StubGestureAdapter()
 
     # Initialize face adapter based on config
     face_provider = cfg["face"].get("provider", "lcd_stub")
