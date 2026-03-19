@@ -33,10 +33,15 @@ class VoiceSessionService:
         print("🎙️ Voice session started. Say 'QUIT' to end.")
 
         greeting = "Hi Reza, I am ready. What should we do?"
+        print(f"🤖 Speaking greeting: {greeting}")
         self._orchestrator.run_once(text=greeting, intent=intent)
+        print("✓ Greeting completed")
         
-        # Allow time for audio to settle and speaker to finish playing
-        time.sleep(1.0)
+        # Wait for greeting to finish playing and speaker output to settle
+        # This prevents the microphone from picking up the greeting as user input
+        print("⏳ Waiting for speaker to settle before listening...")
+        time.sleep(2.0)
+        print("✓ Ready to listen")
 
         while True:
             if max_turns > 0 and turn >= max_turns:
@@ -68,9 +73,6 @@ class VoiceSessionService:
 
             reply = self._llm.generate_reply(user_text=user_text, intent=intent)
             self._orchestrator.run_once(text=reply, intent=intent)
-            
-            # Allow time for audio to settle before next listen
-            time.sleep(0.5)
 
             turn += 1
             self._storage.put_json(
@@ -293,6 +295,9 @@ class VoiceSessionService:
         print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
         self._say("Available commands: wave, fingers open or close, left or right arm moves, stop motion, some more, reverse, main menu, or quit to return to chat.")
+        
+        # Wait for startup messages to finish playing
+        time.sleep(1.5)
 
         turn = 0
         last_cmd: Optional[Dict[str, Any]] = None
