@@ -76,8 +76,17 @@ class RivaSpeechAdapter(SpeechPort):
                 sample_rate_hz=self._rate,
                 voice_name=self._voice,
             )
-            logger.info(f"Synthesis complete, got {len(resp.audio)} bytes")
-            print(f"✓ TTS synthesis complete: {len(resp.audio)} bytes", flush=True)
+            audio_bytes = resp.audio
+            logger.info(f"Synthesis complete, got {len(audio_bytes)} bytes")
+            print(f"✓ TTS synthesis complete: {len(audio_bytes)} bytes", flush=True)
+            
+            # Calculate audio duration in seconds
+            # PCM audio: 2 bytes per sample (16-bit), 1 channel (mono)
+            bytes_per_sample = 2
+            num_samples = len(audio_bytes) // bytes_per_sample
+            audio_duration_sec = num_samples / self._rate
+            logger.info(f"Audio duration: {audio_duration_sec:.2f}s ({num_samples} samples at {self._rate}Hz)")
+            print(f"⏱️  Audio duration: {audio_duration_sec:.2f}s", flush=True)
             
             p = pyaudio.PyAudio()
             logger.info(f"PyAudio initialized")
@@ -99,9 +108,16 @@ class RivaSpeechAdapter(SpeechPort):
             stream = p.open(**stream_params)
             logger.info(f"Stream opened successfully")
             
-            logger.info(f"Writing {len(resp.audio)} bytes to stream")
-            print(f"▶️  Playing audio ({len(resp.audio)} bytes)...", flush=True)
-            stream.write(resp.audio)
+            logger.info(f"Writing {len(audio_bytes)} bytes to stream")
+            print(f"▶️  Playing audio ({len(audio_bytes)} bytes)...", flush=True)
+            
+            # Write audio to stream - stream.write() is blocking
+            # The caller should be animating the face during this time
+            # Pass the duration so animation can loop appropriately
+            # Store it on the adapter so the face can access it
+            self._last_audio_duration = audio_duration_sec
+            
+            stream.write(audio_bytes)
             stream.stop_stream()
             stream.close()
             logger.info(f"Audio playback complete")

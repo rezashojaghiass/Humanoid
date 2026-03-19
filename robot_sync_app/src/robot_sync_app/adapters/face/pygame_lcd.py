@@ -13,6 +13,7 @@ class PyGameLCDFaceAdapter(FacePort):
     - Physical HDMI monitor attached to Xavier
     - Animated frame sequences (30 frames per expression)
     - Independent from VNC/headless connections
+    - Loops animation during audio playback duration
     """
 
     def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
@@ -62,6 +63,7 @@ class PyGameLCDFaceAdapter(FacePort):
             self.running = True
             self.current_expression = "Smile"
             self.current_frame = 0
+            self._audio_duration = 0.0  # Will be set by orchestrator
             
             print(f"[FACE] HDMI Display initialized: {width}x{height}")
             print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
@@ -112,16 +114,16 @@ class PyGameLCDFaceAdapter(FacePort):
         
         return expressions
 
-    def set_expression(self, expression: str) -> None:
+    def set_expression(self, expression: str, audio_duration: float = 0.0) -> None:
         """Display the specified animated expression on HDMI monitor.
         
-        Animation plays asynchronously - this method returns quickly while 
-        frames continue to be displayed.
+        Loops animation for the duration of audio playback.
         
         Args:
             expression: Expression name (e.g., 'Smile', 'Sad', 'Surprise', 'AA', 'EE', 'OO')
+            audio_duration: Duration of audio in seconds - animation will loop for this time
         """
-        print(f"[FACE] expression={expression}")
+        print(f"[FACE] expression={expression}, looping for {audio_duration:.2f}s")
         
         if not self.pygame or not self.screen or not self.expressions:
             return
@@ -150,14 +152,27 @@ class PyGameLCDFaceAdapter(FacePort):
             target_expr = available[0]
             print(f"[FACE] Expression '{expression}' not found, using '{target_expr}'")
         
-        # Animate with reduced frame delay (100ms = 10fps loops animation faster)
-        # This allows animation to cycle while speech plays in parallel
         self.current_expression = target_expr
         frames = self.expressions[target_expr]
-        frame_delay = 0.10  # 100ms per frame = ~10fps (faster loops)
         
-        # Play animation once, but quickly so it doesn't block speech
-        for img in frames:
+        # Calculate frame delay to loop smoothly during audio playback
+        # If no duration given, just play once quickly
+        if audio_duration <= 0:
+            audio_duration = len(frames) * 0.05  # Default: 50ms per frame
+        
+        frame_delay = audio_duration / len(frames)  # Spread frames across audio duration
+        frame_delay = max(frame_delay, 0.01)  # Minimum 10ms per frame
+        
+        logger_msg = f"[FACE] Looping {len(frames)} frames over {audio_duration:.2f}s ({frame_delay*1000:.1f}ms per frame)"
+        print(logger_msg, flush=True)
+        
+        # Loop animation for the duration of audio playback
+        elapsed = 0.0
+        frame_idx = 0
+        
+        while elapsed < audio_duration and self.running:
+            img = frames[frame_idx % len(frames)]
+            
             try:
                 # Ensure image is in RGB mode
                 if img.mode != 'RGB':
@@ -178,8 +193,9 @@ class PyGameLCDFaceAdapter(FacePort):
                 except:
                     pass
                 
-                # Delay with small increments to allow responsiveness
                 time.sleep(frame_delay)
+                elapsed += frame_delay
+                frame_idx += 1
             except Exception as e:
                 print(f"[FACE] Animation error: {e}")
                 break

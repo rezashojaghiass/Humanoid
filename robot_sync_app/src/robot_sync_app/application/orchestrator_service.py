@@ -33,7 +33,12 @@ class OrchestratorService:
         started_at = datetime.now(timezone.utc).isoformat()
 
         def on_start() -> None:
-            self._face.set_expression(plan.face_expression)
+            # Get audio duration from speech adapter (if available)
+            audio_duration = 0.0
+            if hasattr(self._speech, '_last_audio_duration'):
+                audio_duration = self._speech._last_audio_duration
+            
+            self._face.set_expression(plan.face_expression, audio_duration)
             if plan.gesture_name:
                 self._gesture.start_gesture(plan.gesture_name)
 
