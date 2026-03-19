@@ -1,6 +1,5 @@
 import os
 import glob
-import threading
 import time
 from pathlib import Path
 from PIL import Image
@@ -14,7 +13,6 @@ class PyGameLCDFaceAdapter(FacePort):
     - Physical HDMI monitor attached to Xavier
     - Animated frame sequences (30 frames per expression)
     - Independent from VNC/headless connections
-    - Background threading for parallel animation during speech
     """
 
     def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
@@ -61,14 +59,9 @@ class PyGameLCDFaceAdapter(FacePort):
             # Load animation frames for each expression
             self.expressions = self._load_animations()
             
-            # Animation state and threading
             self.running = True
             self.current_expression = "Smile"
             self.current_frame = 0
-            self._animation_thread = None
-            self._animation_lock = threading.Lock()
-            self._stop_animation = threading.Event()
-            self._target_expression = None
             
             print(f"[FACE] HDMI Display initialized: {width}x{height}")
             print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
@@ -119,62 +112,11 @@ class PyGameLCDFaceAdapter(FacePort):
         
         return expressions
 
-    def _animate_background(self) -> None:
-        """Background thread that continuously loops animation frames."""
-        frame_delay = 0.033  # ~30fps (33ms per frame)
-        
-        while self.running:
-            # Wait for target expression to be set
-            while self._target_expression is None and self.running:
-                time.sleep(0.01)
-            
-            if not self.running:
-                break
-            
-            with self._animation_lock:
-                target = self._target_expression
-                if target not in self.expressions:
-                    continue
-                frames = self.expressions[target]
-            
-            # Loop animation frames continuously until stopped
-            frame_idx = 0
-            while not self._stop_animation.is_set() and self.running:
-                if self._target_expression != target:
-                    # Expression changed, break to get new target
-                    break
-                
-                with self._animation_lock:
-                    img = frames[frame_idx % len(frames)]
-                
-                try:
-                    # Ensure image is in RGB mode
-                    if img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    
-                    # Convert PIL image to pygame surface
-                    surf = self.pygame.image.fromstring(img.tobytes(), img.size, "RGB")
-                    
-                    # Display frame on HDMI monitor
-                    self.screen.blit(surf, (0, 0))
-                    self.pygame.display.flip()
-                    
-                    # Handle pygame events (prevent window from freezing)
-                    try:
-                        for event in self.pygame.event.get():
-                            if event.type == self.pygame.QUIT:
-                                self.running = False
-                    except:
-                        pass
-                    
-                    frame_idx += 1
-                    time.sleep(frame_delay)
-                except Exception as e:
-                    print(f"[FACE] Animation error: {e}")
-                    break
-
     def set_expression(self, expression: str) -> None:
-        """Start displaying the specified animated expression on HDMI monitor in background.
+        """Display the specified animated expression on HDMI monitor.
+        
+        Animation plays asynchronously - this method returns quickly while 
+        frames continue to be displayed.
         
         Args:
             expression: Expression name (e.g., 'Smile', 'Sad', 'Surprise', 'AA', 'EE', 'OO')
@@ -208,23 +150,41 @@ class PyGameLCDFaceAdapter(FacePort):
             target_expr = available[0]
             print(f"[FACE] Expression '{expression}' not found, using '{target_expr}'")
         
-        # Start background animation thread if not already running
-        if self._animation_thread is None or not self._animation_thread.is_alive():
-            self._animation_thread = threading.Thread(target=self._animate_background, daemon=True)
-            self._animation_thread.start()
+        # Animate with reduced frame delay (100ms = 10fps loops animation faster)
+        # This allows animation to cycle while speech plays in parallel
+        self.current_expression = target_expr
+        frames = self.expressions[target_expr]
+        frame_delay = 0.10  # 100ms per frame = ~10fps (faster loops)
         
-        # Stop current animation and set new target
-        self._stop_animation.set()
-        time.sleep(0.05)  # Brief pause to let old animation finish
-        self._stop_animation.clear()
-        
-        with self._animation_lock:
-            self._target_expression = target_expr
+        # Play animation once, but quickly so it doesn't block speech
+        for img in frames:
+            try:
+                # Ensure image is in RGB mode
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Convert PIL image to pygame surface
+                surf = self.pygame.image.fromstring(img.tobytes(), img.size, "RGB")
+                
+                # Display frame on HDMI monitor
+                self.screen.blit(surf, (0, 0))
+                self.pygame.display.flip()
+                
+                # Handle pygame events (prevent window from freezing)
+                try:
+                    for event in self.pygame.event.get():
+                        if event.type == self.pygame.QUIT:
+                            self.running = False
+                except:
+                    pass
+                
+                # Delay with small increments to allow responsiveness
+                time.sleep(frame_delay)
+            except Exception as e:
+                print(f"[FACE] Animation error: {e}")
+                break
 
     def cleanup(self):
         """Clean up pygame resources."""
-        self.running = False
-        if self._animation_thread and self._animation_thread.is_alive():
-            self._animation_thread.join(timeout=1.0)
         if self.pygame:
             self.pygame.quit()
