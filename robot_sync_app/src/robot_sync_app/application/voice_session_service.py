@@ -1,4 +1,5 @@
 import time
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -9,6 +10,12 @@ from robot_sync_app.ports.storage_port import StoragePort
 
 
 class VoiceSessionService:
+    """
+    Voice session with threading architecture:
+    - Main thread: Available for animation/display updates (pygame safe)
+    - Background thread: Handles RIVA operations (ASR, LLM, TTS)
+    """
+
     def __init__(
         self,
         asr: ASRPort,
@@ -25,6 +32,7 @@ class VoiceSessionService:
         self._chat_last_cmd: Optional[Dict[str, Any]] = None
 
     def run(self, intent: str = "chat", max_turns: int = 0) -> None:
+        """Main thread handles orchestration, background thread handles RIVA I/O"""
         if intent == "arm_calibration":
             self._run_arm_calibration(max_turns=max_turns)
             return
@@ -32,65 +40,90 @@ class VoiceSessionService:
         turn = 0
         print("🎙️ Voice session started. Say 'QUIT' to end.")
 
+        # Greeting: main thread, blocking is OK for initialization
         greeting = "Hi Reza, I am ready. What should we do?"
         print(f"🤖 Speaking greeting: {greeting}")
         self._orchestrator.run_once(text=greeting, intent=intent)
         print("✓ Greeting completed")
         
-        # Wait for greeting to finish playing and speaker output to settle
-        # This prevents the microphone from picking up the greeting as user input
         print("⏳ Waiting for speaker to settle before listening...")
-        time.sleep(0.5)  # Reduced from 2.0s for faster response (like ChatBotRobot)
+        time.sleep(0.5)
         print("✓ Ready to listen")
 
-        while True:
-            if max_turns > 0 and turn >= max_turns:
-                print("✓ Reached max turns")
-                break
+        # Thread synchronization
+        should_exit = threading.Event()
+        
+        def riva_worker() -> None:
+            """Background thread: ASR, LLM, TTS - all RIVA I/O operations"""
+            nonlocal turn
+            
+            while not should_exit.is_set():
+                try:
+                    # ASR: listen (blocking, OK in background thread)
+                    user_text = self._asr.listen_and_transcribe()
+                    if not user_text or should_exit.is_set():
+                        continue
 
-            user_text = self._asr.listen_and_transcribe()
-            if not user_text:
-                continue
+                    user_text_lower = user_text.lower().strip()
+                    if any(word in user_text_lower for word in ["quit", "exit", "stop"]):
+                        print("👋 Ending voice session")
+                        should_exit.set()
+                        break
 
-            user_text_lower = user_text.lower().strip()
-            if "quit" in user_text_lower or "exit" in user_text_lower or "stop" in user_text_lower:
-                print("👋 Ending voice session")
-                break
+                    if self._is_movement_intent(user_text):
+                        self._orchestrator.run_once(
+                            text="Switching to movement mode.",
+                            intent="arm_calibration",
+                        )
+                        self._run_arm_calibration(max_turns=0)
+                        self._orchestrator.run_once(
+                            text="Back to chat mode.",
+                            intent="arm_calibration",
+                        )
+                        continue
 
-            if self._is_movement_intent(user_text):
-                # Hybrid behavior: once movement intent is detected in chat,
-                # hand off to the exact calibration-style short-answer loop.
-                self._orchestrator.run_once(
-                    text="Switching to movement mode.",
-                    intent="arm_calibration",
-                )
-                self._run_arm_calibration(max_turns=0)
-                self._orchestrator.run_once(
-                    text="Back to chat mode.",
-                    intent="arm_calibration",
-                )
-                continue
+                    # LLM: generate reply (blocking, OK in background thread)
+                    reply = self._llm.generate_reply(user_text=user_text, intent=intent)
+                    
+                    # TTS: speak reply with animation sync
+                    self._orchestrator.run_once(text=reply, intent=intent)
 
-            reply = self._llm.generate_reply(user_text=user_text, intent=intent)
-            self._orchestrator.run_once(text=reply, intent=intent)
+                    turn += 1
+                    self._storage.put_json(
+                        "sessions/latest_turn.json",
+                        {
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "turn": turn,
+                            "intent": intent,
+                            "user_text": user_text,
+                            "assistant_reply": reply,
+                        },
+                    )
 
-            turn += 1
-            self._storage.put_json(
-                "sessions/latest_turn.json",
-                {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "turn": turn,
-                    "intent": intent,
-                    "user_text": user_text,
-                    "assistant_reply": reply,
-                },
-            )
+                    if max_turns > 0 and turn >= max_turns:
+                        print("✓ Reached max turns")
+                        should_exit.set()
+                        break
+                        
+                except Exception as e:
+                    print(f"❌ Error in background RIVA thread: {e}")
+                    should_exit.set()
+                    break
+        
+        # Start background thread for RIVA operations
+        riva_thread = threading.Thread(target=riva_worker, daemon=True)
+        riva_thread.start()
+        
+        # Main thread: wait for exit signal
+        # In future, main thread could handle animation updates here
+        while not should_exit.is_set():
+            time.sleep(0.1)  # Small sleep to prevent busy-wait
+        
+        # Wait for background thread to finish
+        riva_thread.join(timeout=5)
 
     def _is_movement_intent(self, text: str) -> bool:
-        # Conservative detector: explicit movement phrases, structured arm/finger
-        # commands, or movement keywords trigger calibration-style mode.
         t = " ".join(text.lower().strip().replace(".", " ").replace(",", " ").split())
-
         if t in {"movement mode", "move mode", "control mode", "arm calibration", "calibration mode"}:
             return True
 
@@ -106,10 +139,8 @@ class VoiceSessionService:
     def _parse_finger_command(self, text: str) -> Optional[Dict[str, Any]]:
         t = text.lower().strip()
         
-        # Check for wave command first (can work standalone)
         if "wave" in t:
             action = "WAVE"
-        # Then check for finger/hand commands
         elif "finger" in t or "fingers" in t or "hand" in t or "hands" in t:
             action = None
             if "open" in t:
@@ -148,7 +179,6 @@ class VoiceSessionService:
         elif "down" in t or "lower" in t:
             direction = "DOWN"
 
-        # Shortcut: "left arm up/down" maps to SHOULDER2.
         if side and direction and (" arm" in f" {t}" or t.startswith("arm ")):
             return {
                 "side": side,
@@ -162,13 +192,13 @@ class VoiceSessionService:
     def _handle_chat_movement(self, user_text: str) -> Optional[str]:
         t = user_text.lower().strip()
         t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
-
+        
         if t_clean in {"movement mode", "move mode", "control mode"}:
             self._chat_move_side = None
             self._chat_move_joint = None
             self._chat_last_cmd = None
             return "Entering movement mode. You can say: wave, fingers open or close, left or right arm, stop motion, or chat mode to exit."
-
+        
         if t_clean in {"chat mode", "normal mode", "conversation mode"}:
             self._chat_move_side = None
             self._chat_move_joint = None
@@ -179,7 +209,7 @@ class VoiceSessionService:
             self._chat_move_side = None
             self._chat_move_joint = None
             return "Movement menu. Available: wave, fingers open or close, left or right arm moves, stop motion, or chat mode to exit."
-
+        
         if t_clean in {"stop motion", "stop all", "freeze"}:
             self._orchestrator.send_command("stop_all", {})
             return "Stopped all movement."
@@ -198,7 +228,7 @@ class VoiceSessionService:
             self._chat_move_joint = str(cmd["joint"])
             self._chat_last_cmd = dict(cmd)
             return "Done. Say some more, reverse, main menu, or chat mode."
-
+        
         if t_clean in {"some more", "more"}:
             if self._chat_last_cmd:
                 self._orchestrator.send_command("arm_calibration_step", self._chat_last_cmd)
@@ -246,15 +276,15 @@ class VoiceSessionService:
                 self._orchestrator.send_command("arm_calibration_step", cmd2)
                 self._chat_last_cmd = dict(cmd2)
                 return "Done. Say some more, reverse, main menu, or chat mode."
-
+        
         if "move" in t_clean or "fingers" in t_clean or "shoulder" in t_clean or "elbow" in t_clean or "arm" in t_clean:
             return "Movement command not clear. Try: left shoulder two down, or fingers open."
-
+        
         return None
 
     def _say(self, text: str) -> None:
         self._orchestrator.run_once(text=text, intent="arm_calibration")
-
+        
     def _parse_arm_command(self, text: str) -> Optional[Dict[str, Any]]:
         t = text.lower().strip()
 
@@ -278,7 +308,6 @@ class VoiceSessionService:
         elif "down" in t or "lower" in t:
             direction = "DOWN"
 
-        # Fixed step amount. Duration safety is enforced on Arduino side (0.5s per move).
         amount = 15
 
         if not side or not joint or not direction:
@@ -295,8 +324,6 @@ class VoiceSessionService:
         print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
         self._say("Available commands: wave, fingers open or close, left or right arm moves, stop motion, some more, reverse, main menu, or quit to return to chat.")
-        
-        # Wait for startup messages to finish playing
         time.sleep(1.5)
 
         turn = 0
@@ -356,7 +383,6 @@ class VoiceSessionService:
                 turn += 1
                 continue
 
-            # Full command still accepted (e.g. "left elbow up")
             cmd = self._parse_arm_command(user_text)
             if cmd:
                 self._orchestrator.send_command("arm_calibration_step", cmd)
@@ -367,7 +393,6 @@ class VoiceSessionService:
                 turn += 1
                 continue
 
-            # Guided short-answer flow
             if side is None:
                 if "left" in t_clean:
                     side = "LEFT"
@@ -413,4 +438,3 @@ class VoiceSessionService:
             last_cmd = cmd
             self._say("Done. Say some more, reverse, main menu, or quit.")
             turn += 1
-

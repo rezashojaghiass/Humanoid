@@ -9,6 +9,7 @@ from robot_sync_app.application.voice_session_service import VoiceSessionService
 from robot_sync_app.adapters.asr.riva_mic_asr import RivaMicASRAdapter
 from robot_sync_app.adapters.face.lcd_stub import LCDStubFaceAdapter
 from robot_sync_app.adapters.face.pygame_lcd import PyGameLCDFaceAdapter
+from robot_sync_app.adapters.face.opencv_lcd import OpenCVLCDFaceAdapter
 from robot_sync_app.adapters.gesture.arduino_serial import ArduinoSerialGestureAdapter
 from robot_sync_app.adapters.gesture.stub_gesture import StubGestureAdapter
 from robot_sync_app.adapters.llm.bedrock_llm import BedrockLLMAdapter
@@ -65,6 +66,12 @@ def build_orchestrator(config_path: str) -> OrchestratorService:
             width=cfg["face"].get("width", 1024),
             height=cfg["face"].get("height", 768),
             fullscreen=cfg["face"].get("fullscreen", True),
+        )
+    elif face_provider == "opencv_lcd":
+        face = OpenCVLCDFaceAdapter(
+            width=cfg["face"].get("width", 1280),
+            height=cfg["face"].get("height", 800),
+            assets_path=cfg["face"].get("assets_path", "/home/reza/cropped_animation_frames"),
         )
     else:
         face = LCDStubFaceAdapter()

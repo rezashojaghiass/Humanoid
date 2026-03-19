@@ -50,7 +50,7 @@ riva_startup:
   start_command: cd /mnt/nvme/reza_backup/riva_quickstart_arm64_v2.14.0 && bash riva_start.sh config.sh -s
 
 gesture:
-  provider: stub  # Servos disabled
+  provider: stub
   serial_port: /dev/ttyACM0
   baud_rate: 115200
   allowed_finger_gestures:
@@ -60,7 +60,7 @@ gesture:
     - fingers_close
 
 face:
-  provider: opencv_lcd  # OpenCV animation
+  provider: opencv_lcd  # OpenCV animation - GL context conflict with threading
   width: 1280
   height: 800
   fullscreen: true
