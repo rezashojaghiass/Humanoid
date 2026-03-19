@@ -60,7 +60,7 @@ gesture:
     - fingers_close
 
 face:
-  provider: pygame_lcd
+  provider: lcd_stub  # Animation disabled - GL context conflict with threading
   width: 1280
   height: 800
   fullscreen: true
