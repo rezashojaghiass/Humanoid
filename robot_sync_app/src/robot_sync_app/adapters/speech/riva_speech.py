@@ -43,6 +43,7 @@ class RivaSpeechAdapter(SpeechPort):
         self._rate = sample_rate_hz
         self._output_device_index = output_device_index
         self._output_device_name_hint = output_device_name_hint
+        self._last_audio_duration = 0.0
         
         # Auto-detect output device if index is None
         if output_device_index is None:
@@ -64,7 +65,6 @@ class RivaSpeechAdapter(SpeechPort):
         auth = riva.client.Auth(uri=self._server)
         tts = riva.client.SpeechSynthesisService(auth)
 
-        on_start()
         p = None
         stream = None
         try:
@@ -88,6 +88,9 @@ class RivaSpeechAdapter(SpeechPort):
             logger.info(f"Audio duration: {audio_duration_sec:.2f}s ({num_samples} samples at {self._rate}Hz)")
             print(f"⏱️  Audio duration: {audio_duration_sec:.2f}s", flush=True)
             
+            # Store duration for orchestrator to use
+            self._last_audio_duration = audio_duration_sec
+            
             p = pyaudio.PyAudio()
             logger.info(f"PyAudio initialized")
             
@@ -108,15 +111,14 @@ class RivaSpeechAdapter(SpeechPort):
             stream = p.open(**stream_params)
             logger.info(f"Stream opened successfully")
             
+            # NOW call on_start() with correct audio duration (right before playing audio)
+            # This ensures face animation loops for exactly the audio duration
+            on_start()
+            
             logger.info(f"Writing {len(audio_bytes)} bytes to stream")
             print(f"▶️  Playing audio ({len(audio_bytes)} bytes)...", flush=True)
             
             # Write audio to stream - stream.write() is blocking
-            # The caller should be animating the face during this time
-            # Pass the duration so animation can loop appropriately
-            # Store it on the adapter so the face can access it
-            self._last_audio_duration = audio_duration_sec
-            
             stream.write(audio_bytes)
             stream.stop_stream()
             stream.close()
