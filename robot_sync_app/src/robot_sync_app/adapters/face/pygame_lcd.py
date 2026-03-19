@@ -1,6 +1,7 @@
 import os
 import glob
 import time
+import threading
 from pathlib import Path
 from PIL import Image
 from robot_sync_app.ports.face_port import FacePort
@@ -13,7 +14,7 @@ class PyGameLCDFaceAdapter(FacePort):
     - Physical HDMI monitor attached to Xavier
     - Animated frame sequences (30 frames per expression)
     - Independent from VNC/headless connections
-    - Loops animation during audio playback duration
+    - Background animation thread for parallel playback with audio
     """
 
     def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
@@ -60,10 +61,19 @@ class PyGameLCDFaceAdapter(FacePort):
             # Load animation frames for each expression
             self.expressions = self._load_animations()
             
+            # Animation state and threading
             self.running = True
             self.current_expression = "Smile"
             self.current_frame = 0
-            self._audio_duration = 0.0  # Will be set by orchestrator
+            self._animation_thread = None
+            self._target_expression = None
+            self._target_duration = 0.0
+            self._animation_lock = threading.Lock()
+            self._new_animation_event = threading.Event()
+            
+            # Start background animation thread
+            self._animation_thread = threading.Thread(target=self._animation_loop, daemon=True)
+            self._animation_thread.start()
             
             print(f"[FACE] HDMI Display initialized: {width}x{height}")
             print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
@@ -114,16 +124,82 @@ class PyGameLCDFaceAdapter(FacePort):
         
         return expressions
 
-    def set_expression(self, expression: str, audio_duration: float = 0.0) -> None:
-        """Display the specified animated expression on HDMI monitor.
+    def _animation_loop(self) -> None:
+        """Background thread that renders animation frames continuously."""
+        frame_delay = 0.033  # Default: ~30fps
         
-        Loops animation for the duration of audio playback.
+        while self.running:
+            # Wait for new animation request
+            self._new_animation_event.wait(timeout=0.1)
+            self._new_animation_event.clear()
+            
+            with self._animation_lock:
+                target_expr = self._target_expression
+                target_duration = self._target_duration
+            
+            if target_expr is None or target_expr not in self.expressions:
+                continue
+            
+            frames = self.expressions[target_expr]
+            
+            # Calculate frame delay for this animation
+            if target_duration <= 0:
+                target_duration = len(frames) * 0.05
+            
+            frame_delay = target_duration / len(frames)
+            frame_delay = max(frame_delay, 0.01)  # Minimum 10ms
+            
+            print(f"[FACE] Animation thread: looping {len(frames)} frames over {target_duration:.2f}s ({frame_delay*1000:.1f}ms per frame)", flush=True)
+            
+            # Loop frames for the target duration
+            elapsed = 0.0
+            frame_idx = 0
+            
+            while elapsed < target_duration and self.running:
+                # Check if expression changed
+                with self._animation_lock:
+                    if self._target_expression != target_expr:
+                        break
+                
+                img = frames[frame_idx % len(frames)]
+                
+                try:
+                    # Ensure image is in RGB mode
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    
+                    # Convert PIL image to pygame surface
+                    surf = self.pygame.image.fromstring(img.tobytes(), img.size, "RGB")
+                    
+                    # Display frame on HDMI monitor
+                    self.screen.blit(surf, (0, 0))
+                    self.pygame.display.flip()
+                    
+                    # Handle pygame events (prevent window from freezing)
+                    try:
+                        for event in self.pygame.event.get():
+                            if event.type == self.pygame.QUIT:
+                                self.running = False
+                    except:
+                        pass
+                    
+                    time.sleep(frame_delay)
+                    elapsed += frame_delay
+                    frame_idx += 1
+                except Exception as e:
+                    print(f"[FACE] Animation error: {e}")
+                    break
+
+    def set_expression(self, expression: str, audio_duration: float = 0.0) -> None:
+        """Set the facial expression to play in background thread (non-blocking).
+        
+        Returns immediately - animation happens in background thread.
         
         Args:
             expression: Expression name (e.g., 'Smile', 'Sad', 'Surprise', 'AA', 'EE', 'OO')
             audio_duration: Duration of audio in seconds - animation will loop for this time
         """
-        print(f"[FACE] expression={expression}, looping for {audio_duration:.2f}s")
+        print(f"[FACE] expression={expression}, looping for {audio_duration:.2f}s", flush=True)
         
         if not self.pygame or not self.screen or not self.expressions:
             return
@@ -152,55 +228,18 @@ class PyGameLCDFaceAdapter(FacePort):
             target_expr = available[0]
             print(f"[FACE] Expression '{expression}' not found, using '{target_expr}'")
         
-        self.current_expression = target_expr
-        frames = self.expressions[target_expr]
+        # Set animation target and signal thread (non-blocking)
+        with self._animation_lock:
+            self._target_expression = target_expr
+            self._target_duration = audio_duration
         
-        # Calculate frame delay to loop smoothly during audio playback
-        # If no duration given, just play once quickly
-        if audio_duration <= 0:
-            audio_duration = len(frames) * 0.05  # Default: 50ms per frame
-        
-        frame_delay = audio_duration / len(frames)  # Spread frames across audio duration
-        frame_delay = max(frame_delay, 0.01)  # Minimum 10ms per frame
-        
-        logger_msg = f"[FACE] Looping {len(frames)} frames over {audio_duration:.2f}s ({frame_delay*1000:.1f}ms per frame)"
-        print(logger_msg, flush=True)
-        
-        # Loop animation for the duration of audio playback
-        elapsed = 0.0
-        frame_idx = 0
-        
-        while elapsed < audio_duration and self.running:
-            img = frames[frame_idx % len(frames)]
-            
-            try:
-                # Ensure image is in RGB mode
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                # Convert PIL image to pygame surface
-                surf = self.pygame.image.fromstring(img.tobytes(), img.size, "RGB")
-                
-                # Display frame on HDMI monitor
-                self.screen.blit(surf, (0, 0))
-                self.pygame.display.flip()
-                
-                # Handle pygame events (prevent window from freezing)
-                try:
-                    for event in self.pygame.event.get():
-                        if event.type == self.pygame.QUIT:
-                            self.running = False
-                except:
-                    pass
-                
-                time.sleep(frame_delay)
-                elapsed += frame_delay
-                frame_idx += 1
-            except Exception as e:
-                print(f"[FACE] Animation error: {e}")
-                break
+        # Signal animation thread to start new animation
+        self._new_animation_event.set()
 
     def cleanup(self):
         """Clean up pygame resources."""
+        self.running = False
+        if self._animation_thread and self._animation_thread.is_alive():
+            self._animation_thread.join(timeout=2.0)
         if self.pygame:
             self.pygame.quit()
