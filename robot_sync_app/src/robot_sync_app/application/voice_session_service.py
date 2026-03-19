@@ -40,7 +40,7 @@ class VoiceSessionService:
         # Wait for greeting to finish playing and speaker output to settle
         # This prevents the microphone from picking up the greeting as user input
         print("⏳ Waiting for speaker to settle before listening...")
-        time.sleep(2.0)
+        time.sleep(0.5)  # Reduced from 2.0s for faster response (like ChatBotRobot)
         print("✓ Ready to listen")
 
         while True:

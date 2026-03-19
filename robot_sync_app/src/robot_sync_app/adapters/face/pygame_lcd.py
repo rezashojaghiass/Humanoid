@@ -33,7 +33,9 @@ class PyGameLCDFaceAdapter(FacePort):
             os.environ['SDL_VIDEODRIVER'] = 'x11'
             os.environ['DISPLAY'] = ':0'  # Direct X11 display, not VNC
             
+            # Initialize pygame without audio mixer to avoid conflicts with PyAudio
             pygame.init()
+            pygame.mixer.quit()  # Disable mixer so PyAudio can use the audio device
             
             self.width = width
             self.height = height
