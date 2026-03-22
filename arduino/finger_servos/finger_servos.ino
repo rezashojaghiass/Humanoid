@@ -117,10 +117,23 @@ const int LRING_OPEN   = RING_CLOSE,   LRING_CLOSE   = RING_OPEN;
 const int LPINKY_OPEN  = PINKY_CLOSE,  LPINKY_CLOSE  = PINKY_OPEN;
 
 // ================== ARM CAL VALUES ==================
-// LEFT SHOULDER #1 (continuous)
-const int LSH1_DOWN    = 700;
-const int LSH1_NEUTRAL = 1370;   // adjust if needed
-const int LSH1_UP      = 1700;
+// 
+// SERVO TYPES:
+// - Continuous servos (shoulders): Pulse width controls DIRECTION & SPEED
+//   * 1500µs = neutral/stopped
+//   * >1500µs = rotate one way (typically UP)
+//   * <1500µs = rotate other way (typically DOWN)
+//   * Distance = constant_speed × duration (more time = more rotation)
+//
+// - Positional servos (elbow): Pulse width controls TARGET POSITION
+//   * Moves to target and holds
+//   * Duration doesn't affect distance
+//
+// LEFT SHOULDER #1 (continuous rotation)
+// Duration: SHOULDER_STEP_MS = 1000ms (gives 2x movement)
+const int LSH1_DOWN    = 700;      // Low pulse → rotate DOWN
+const int LSH1_NEUTRAL = 1370;     // Mid pulse → servo stopped/neutral
+const int LSH1_UP      = 1700;     // High pulse → rotate UP (2x amplified)
 
 // LEFT SHOULDER #2 (continuous)
 const int LSH2_DOWN    = 700;
@@ -430,8 +443,22 @@ const int R_SH2_UP_US = 2300;
 
 const int SERVO_MIN_US = 600;
 const int SERVO_MAX_US = 2400;
+// ================== SERVO MOVEMENT TIMING ==================
+// ARM_STEP_MS: Normal movement duration for elbow/arm servos (500ms)
+// SHOULDER_STEP_MS: Duration for shoulder movements (1000ms = 2x normal)
+// 
+// HOW IT WORKS:
+// - Continuous servos (shoulders) move toward a target pulse width at constant speed
+// - Duration = how long the servo moves = how far it travels
+// - 2x duration = 2x distance traveled (same speed, more time)
+// - SHOULDER_STEP_MS = 1000ms gives 2x movement amplification
+// 
+// EXAMPLE:
+// - Command: Set shoulder to UP (1700µs), wait 500ms → rotates 50% of max
+// - Command: Set shoulder to UP (1700µs), wait 1000ms → rotates 100% of max (2x)
+// ============================================================
 const unsigned long ARM_STEP_MS = 500;
-const unsigned long SHOULDER_STEP_MS = 1000;  // 2x for shoulder movements
+const unsigned long SHOULDER_STEP_MS = 1000;  // 2x movement amplification
 
 bool talkOn = false;
 unsigned long talkCycleStartMs = 0;
@@ -748,6 +775,52 @@ void applyElbowStep(const String &side, const String &direction, int amount) {
   }
 }
 
+// ================== SHOULDER MOVEMENT CONTROLLER ==================
+// Controls continuous rotation shoulder servos (LEFT_SH1, LEFT_SH2, RIGHT_SH1, RIGHT_SH2)
+// 
+// MECHANISM:
+// 1. Power ON the shoulder servo
+// 2. Set pulse width to target (UP or DOWN value)
+//    - UP pulse (e.g., 1700µs): Servo rotates in UP direction
+//    - DOWN pulse (e.g., 700µs): Servo rotates in DOWN direction
+// 3. WAIT for SHOULDER_STEP_MS (1000ms = 2x amplification)
+//    - Servo moves toward target during this time
+//    - Longer wait = more rotation at same speed
+// 4. Set pulse width back to NEUTRAL to stop
+// 5. Power OFF
+//
+// CALIBRATION VALUES (microseconds):
+// - UP (e.g., 1700µs): High pulse → rotate UP direction
+// - DOWN (e.g., 700µs): Low pulse → rotate DOWN direction  
+// - NEUTRAL (~1400µs): Middle pulse → servo stopped
+//
+// WHY 2x MOVEMENT WORKS:
+// - Original: delay(500ms) → 50% of max rotation range
+// - Amplified: delay(1000ms) → 100% of max rotation range (2x)
+// ===================================================================
+// ================== SHOULDER MOVEMENT CONTROLLER ==================
+// Controls continuous rotation shoulder servos (LEFT_SH1, LEFT_SH2, RIGHT_SH1, RIGHT_SH2)
+// 
+// MECHANISM:
+// 1. Power ON the shoulder servo
+// 2. Set pulse width to target (UP or DOWN value)
+//    - UP pulse (e.g., 1700µs): Servo rotates in UP direction
+//    - DOWN pulse (e.g., 700µs): Servo rotates in DOWN direction
+// 3. WAIT for SHOULDER_STEP_MS (1000ms = 2x amplification)
+//    - Servo moves toward target during this time
+//    - Longer wait = more rotation at same speed
+// 4. Set pulse width back to NEUTRAL to stop
+// 5. Power OFF
+//
+// CALIBRATION VALUES (microseconds):
+// - UP (e.g., 1700µs): High pulse → rotate UP direction
+// - DOWN (e.g., 700µs): Low pulse → rotate DOWN direction  
+// - NEUTRAL (~1400µs): Middle pulse → servo stopped
+//
+// WHY 2x MOVEMENT WORKS:
+// - Original: delay(500ms) → 50% of max rotation range
+// - Amplified: delay(1000ms) → 100% of max rotation range (2x)
+// ===================================================================
 void applyShoulderStep(const String &side, const String &joint, const String &direction) {
   // SHOULDER2 is handled as positional-step to ensure visible calibration movement.
   if (joint == "SHOULDER2") {
