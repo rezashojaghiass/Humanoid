@@ -124,7 +124,7 @@ class VoiceSessionService:
 
     def _is_movement_intent(self, text: str) -> bool:
         t = " ".join(text.lower().strip().replace(".", " ").replace(",", " ").split())
-        if t in {"movement mode", "move mode", "control mode", "arm calibration", "calibration mode"}:
+        if t in {"movement mode", "move mode", "motion mode", "control mode", "arm calibration", "calibration mode"}:
             return True
 
         if self._parse_arm_command(text) is not None:
@@ -193,7 +193,7 @@ class VoiceSessionService:
         t = user_text.lower().strip()
         t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
         
-        if t_clean in {"movement mode", "move mode", "control mode"}:
+        if t_clean in {"movement mode", "move mode", "motion mode", "control mode"}:
             self._chat_move_side = None
             self._chat_move_joint = None
             self._chat_last_cmd = None
@@ -231,7 +231,9 @@ class VoiceSessionService:
         
         if t_clean in {"some more", "more"}:
             if self._chat_last_cmd:
-                self._orchestrator.send_command("arm_calibration_step", self._chat_last_cmd)
+                cmd_amplified = dict(self._chat_last_cmd)
+                cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
+                self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
                 return "Done."
             return "No previous arm move. Say left or right."
 
@@ -366,7 +368,9 @@ class VoiceSessionService:
                 if not last_cmd:
                     self._say("No previous move. Main menu. Say left or right.")
                     continue
-                self._orchestrator.send_command("arm_calibration_step", last_cmd)
+                cmd_amplified = dict(last_cmd)
+                cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
+                self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
                 self._say("Done. Say some more, reverse, main menu, or quit.")
                 turn += 1
                 continue

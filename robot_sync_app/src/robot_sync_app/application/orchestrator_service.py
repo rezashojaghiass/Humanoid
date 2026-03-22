@@ -17,7 +17,7 @@ class OrchestratorService:
         gesture: GesturePort,
         face: FacePort,
         storage: StoragePort,
-        neutral_expression: str = "neutral",
+        neutral_expression: str = "EE",
     ) -> None:
         self._planner = planner
         self._speech = speech

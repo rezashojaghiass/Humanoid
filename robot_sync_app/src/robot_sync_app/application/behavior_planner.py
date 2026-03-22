@@ -11,7 +11,7 @@ class BehaviorPlanner:
             return BehaviorPlan(
                 speech_text=utterance.text,
                 gesture_name="",
-                face_expression="neutral",
+                face_expression="EE",
             )
 
         if "question" in text or utterance.intent == "quiz":

@@ -757,7 +757,7 @@ void applyShoulderStep(const String &side, const String &joint, const String &di
       powerOn(L_SH2_PWR);
       sLSh2.attach(L_SH2_PIN);
       sLSh2.writeMicroseconds(clampUs(currentLSh2Us));
-      delay(SHOULDER_STEP_MS);
+      delay(ARM_STEP_MS);
       sLSh2.detach();
       powerOff(L_SH2_PWR);
     } else {
@@ -766,7 +766,7 @@ void applyShoulderStep(const String &side, const String &joint, const String &di
       powerOn(R_SH2_PWR);
       sRSh2.attach(R_SH2_PIN);
       sRSh2.writeMicroseconds(clampUs(currentRSh2Us));
-      delay(SHOULDER_STEP_MS);
+      delay(ARM_STEP_MS);
       sRSh2.detach();
       powerOff(R_SH2_PWR);
     }
@@ -782,7 +782,7 @@ void applyShoulderStep(const String &side, const String &joint, const String &di
     Servo *s = (joint == "SHOULDER1") ? &sLSh1 : &sLSh2;
     int neutral = (joint == "SHOULDER1") ? L_SH1_NEUTRAL_US : L_SH2_NEUTRAL_US;
     powerOn(pwr); s->attach(pin); s->writeMicroseconds(clampUs(target));
-    delay(SHOULDER_STEP_MS);
+    delay(ARM_STEP_MS);
     s->writeMicroseconds(clampUs(neutral));
     delay(120);
     s->detach(); powerOff(pwr);
@@ -794,7 +794,7 @@ void applyShoulderStep(const String &side, const String &joint, const String &di
     Servo *s = (joint == "SHOULDER1") ? &sRSh1 : &sRSh2;
     int neutral = (joint == "SHOULDER1") ? R_SH1_NEUTRAL_US : R_SH2_NEUTRAL_US;
     powerOn(pwr); s->attach(pin); s->writeMicroseconds(clampUs(target));
-    delay(SHOULDER_STEP_MS);
+    delay(ARM_STEP_MS);
     s->writeMicroseconds(clampUs(neutral));
     delay(120);
     s->detach(); powerOff(pwr);
