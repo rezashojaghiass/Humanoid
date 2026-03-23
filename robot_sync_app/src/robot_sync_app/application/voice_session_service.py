@@ -343,12 +343,13 @@ class VoiceSessionService:
         
         print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
+        self._say("Left hand, right hand, or both hands?")
         time.sleep(0.5)
 
         turn = 0
         last_cmd: Optional[Dict[str, Any]] = None
+        side: Optional[str] = None       # "LEFT", "RIGHT", or "BOTH"
         body_part: Optional[str] = None  # "shoulder", "elbow", or "fingers"
-        side: Optional[str] = None       # "LEFT" or "RIGHT"
         joint: Optional[str] = None      # "SHOULDER1", "SHOULDER2", or "ELBOW"
         direction: Optional[str] = None  # "UP", "DOWN", "LEFT", "RIGHT", "OPEN", "CLOSE"
 
@@ -376,21 +377,30 @@ class VoiceSessionService:
             # Main menu reset
             if "main menu" in t_clean or "menu" in t_clean or "enough" in t_clean:
                 last_cmd = None
-                body_part = None
                 side = None
+                body_part = None
                 joint = None
                 direction = None
-                self._say("What do you want me to do?")
+                self._say("Left hand, right hand, or both hands?")
                 continue
 
             # Handle "some more" - amplify last command
             if "some more" in t_clean or t_clean == "more":
                 if not last_cmd:
-                    self._say("No previous move. What do you want me to do?")
+                    self._say("No previous move. Left hand, right hand, or both hands?")
                     continue
                 cmd_amplified = dict(last_cmd)
                 cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
-                self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
+                
+                # Handle BOTH arms for "some more"
+                if last_cmd.get("side") == "BOTH" and "joint" in last_cmd:
+                    for arm_side in ["LEFT", "RIGHT"]:
+                        cmd_to_send = dict(cmd_amplified)
+                        cmd_to_send["side"] = arm_side
+                        self._orchestrator.send_command("arm_calibration_step", cmd_to_send)
+                else:
+                    self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
+                
                 self._say("Done. Say some more, reverse, main menu, or quit.")
                 turn += 1
                 continue
@@ -398,7 +408,7 @@ class VoiceSessionService:
             # Handle "reverse" - reverse direction
             if "reverse" in t_clean:
                 if not last_cmd:
-                    self._say("No previous move. What do you want me to do?")
+                    self._say("No previous move. Left hand, right hand, or both hands?")
                     continue
                 rev = dict(last_cmd)
                 rev_direction = str(rev.get("direction"))
@@ -414,49 +424,58 @@ class VoiceSessionService:
                     rev["direction"] = "CLOSE"
                 elif rev_direction == "CLOSE":
                     rev["direction"] = "OPEN"
-                self._orchestrator.send_command("arm_calibration_step", rev)
+                
+                # Handle BOTH arms for "reverse"
+                if last_cmd.get("side") == "BOTH" and "joint" in last_cmd:
+                    for arm_side in ["LEFT", "RIGHT"]:
+                        rev_to_send = dict(rev)
+                        rev_to_send["side"] = arm_side
+                        self._orchestrator.send_command("arm_calibration_step", rev_to_send)
+                else:
+                    self._orchestrator.send_command("arm_calibration_step", rev)
+                
                 last_cmd = rev
                 self._say("Reversed. Say some more, reverse, main menu, or quit.")
                 turn += 1
                 continue
 
-            # ========== STEP 1: Ask "What do you want me to do?" ==========
+            # ========== STEP 1: Ask "Left, Right, or Both?" ==========
+            if side is None:
+                if "both" in t_clean:
+                    side = "BOTH"
+                    self._say("Shoulder, elbow, or fingers?")
+                    continue
+                elif "left" in t_clean:
+                    side = "LEFT"
+                    self._say("Shoulder, elbow, or fingers?")
+                    continue
+                elif "right" in t_clean:
+                    side = "RIGHT"
+                    self._say("Shoulder, elbow, or fingers?")
+                    continue
+                else:
+                    self._say("Left hand, right hand, or both hands?")
+                    continue
+
+            # ========== STEP 2: Ask body part (Shoulder, Elbow, or Fingers) ==========
             if body_part is None:
-                # Parse body part from user input
                 if "finger" in t_clean or "hand" in t_clean:
                     body_part = "fingers"
-                    side = None  # Fingers don't need a side
                     self._say("Do you want me to open or close?")
                     continue
                 elif "shoulder" in t_clean:
                     body_part = "shoulder"
-                    # Now parse which side
-                    if "left" in t_clean:
-                        side = "LEFT"
-                        self._say("Main servo, shoulder one, or second servo, shoulder two?")
-                    elif "right" in t_clean:
-                        side = "RIGHT"
-                        self._say("Main servo, shoulder one, or second servo, shoulder two?")
-                    else:
-                        self._say("Left shoulder or right shoulder?")
+                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
                     continue
                 elif "elbow" in t_clean or "elb" in t_clean:
                     body_part = "elbow"
-                    # Parse which side
-                    if "left" in t_clean:
-                        side = "LEFT"
-                        self._say("Do you want me to open or close?")
-                    elif "right" in t_clean:
-                        side = "RIGHT"
-                        self._say("Do you want me to open or close?")
-                    else:
-                        self._say("Left elbow or right elbow?")
+                    self._say("Do you want me to open or close?")
                     continue
                 else:
-                    self._say("What do you want me to do?")
+                    self._say("Shoulder, elbow, or fingers?")
                     continue
 
-            # ========== STEP 2: For shoulders, ask "Shoulder 1 or Shoulder 2?" ==========
+            # ========== STEP 3: For shoulders, ask "Shoulder 1 or Shoulder 2?" ==========
             if body_part == "shoulder" and joint is None:
                 if "shoulder 1" in t_clean or "shoulder1" in t_clean or "shoulder one" in t_clean or "main servo" in t_clean or t_clean in {"s1", "one", "1", "main"}:
                     joint = "SHOULDER1"
@@ -466,31 +485,8 @@ class VoiceSessionService:
                     joint = "SHOULDER2"
                     self._say("Do you want me to move left or right?")
                     continue
-                elif "left" in t_clean and side is None:
-                    side = "LEFT"
-                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
-                    continue
-                elif "right" in t_clean and side is None:
-                    side = "RIGHT"
-                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
-                    continue
                 else:
                     self._say("Main servo, shoulder one, or second servo, shoulder two?")
-                    continue
-
-            # ========== STEP 3: For elbow, ask "Open or close?" ==========
-            if body_part == "elbow" and joint is None:
-                if "left" in t_clean and side is None:
-                    side = "LEFT"
-                    self._say("Do you want me to open or close?")
-                    continue
-                elif "right" in t_clean and side is None:
-                    side = "RIGHT"
-                    self._say("Do you want me to open or close?")
-                    continue
-                else:
-                    joint = "ELBOW"  # Default, will ask for action next
-                    self._say("Do you want me to open or close?")
                     continue
 
             # ========== STEP 4: Get direction/action ==========
@@ -534,37 +530,51 @@ class VoiceSessionService:
 
             # ========== EXECUTE COMMAND ==========
             if body_part == "fingers":
-                # Handle finger commands
+                # Handle finger commands - side is "LEFT", "RIGHT", or "BOTH"
                 action = "OPEN" if direction == "OPEN" else "CLOSE"
-                finger_cmd = {"action": action, "side": "BOTH"}
+                finger_cmd = {"action": action, "side": side}
                 self._orchestrator.send_command("finger_command", finger_cmd)
-                last_cmd = {"action": action, "side": "BOTH"}
+                last_cmd = {"action": action, "side": side}
                 self._say("Done. Say some more, reverse, main menu, or quit.")
                 # Reset state for next command
-                body_part = None
                 side = None
+                body_part = None
                 joint = None
                 direction = None
                 turn += 1
                 continue
             elif body_part in {"shoulder", "elbow"} and side and joint and direction:
                 # Handle arm commands
-                arm_cmd = {
-                    "side": side,
-                    "joint": joint,
-                    "direction": direction,
-                    "amount": 15,
-                }
-                self._orchestrator.send_command("arm_calibration_step", arm_cmd)
-                last_cmd = dict(arm_cmd)
+                if side == "BOTH":
+                    # Send command to both left and right arms
+                    for arm_side in ["LEFT", "RIGHT"]:
+                        arm_cmd = {
+                            "side": arm_side,
+                            "joint": joint,
+                            "direction": direction,
+                            "amount": 15,
+                        }
+                        self._orchestrator.send_command("arm_calibration_step", arm_cmd)
+                    last_cmd = {"side": "BOTH", "joint": joint, "direction": direction, "amount": 15}
+                else:
+                    # Send command to specific arm
+                    arm_cmd = {
+                        "side": side,
+                        "joint": joint,
+                        "direction": direction,
+                        "amount": 15,
+                    }
+                    self._orchestrator.send_command("arm_calibration_step", arm_cmd)
+                    last_cmd = dict(arm_cmd)
+                
                 self._say("Done. Say some more, reverse, main menu, or quit.")
                 # Reset state for next command
-                body_part = None
                 side = None
+                body_part = None
                 joint = None
                 direction = None
                 turn += 1
                 continue
 
             # Fallback if something goes wrong
-            self._say("What do you want me to do?")
+            self._say("Left hand, right hand, or both hands?")
