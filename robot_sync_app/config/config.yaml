@@ -50,7 +50,7 @@ riva_startup:
   start_command: cd /mnt/nvme/reza_backup/riva_quickstart_arm64_v2.14.0 && bash riva_start.sh config.sh -s
 
 gesture:
-  provider: arduino_serial  # Servos enabled
+  provider: stub  # Servos disabled at startup, enabled in movement mode
   serial_port: /dev/ttyACM0
   baud_rate: 115200
   allowed_finger_gestures:

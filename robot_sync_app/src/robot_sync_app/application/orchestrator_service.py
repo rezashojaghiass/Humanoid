@@ -26,6 +26,10 @@ class OrchestratorService:
         self._storage = storage
         self._neutral = neutral_expression
 
+    def set_gesture_adapter(self, gesture: GesturePort) -> None:
+        """Switch to a different gesture adapter (e.g., from stub to arduino_serial)"""
+        self._gesture = gesture
+
     def run_once(self, text: str, intent: str = "chat") -> None:
         utterance = Utterance(text=text, intent=intent)
         plan = self._planner.plan(utterance)

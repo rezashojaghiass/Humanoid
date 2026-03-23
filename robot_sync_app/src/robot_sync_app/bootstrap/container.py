@@ -111,9 +111,23 @@ def build_voice_session(config_path: str) -> VoiceSessionService:
             min_cooldown_sec=cfg["llm"].get("min_cooldown_sec", 1.5),
         )
 
+    # Create both gesture adapters for dynamic switching
+    stub_gesture = StubGestureAdapter()
+    arduino_gesture = ArduinoSerialGestureAdapter(
+        port=cfg["gesture"]["serial_port"],
+        baud_rate=cfg["gesture"]["baud_rate"],
+        enable_main_arms=cfg["safety"]["enable_main_arms"],
+        allowed_finger_gestures=cfg["gesture"]["allowed_finger_gestures"],
+    )
+    gesture_adapters = {
+        "stub": stub_gesture,
+        "arduino_serial": arduino_gesture,
+    }
+
     return VoiceSessionService(
         asr=asr,
         llm=llm,
         orchestrator=orchestrator,
         storage=storage,
+        gesture_adapters=gesture_adapters,
     )

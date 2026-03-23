@@ -7,6 +7,7 @@ from robot_sync_app.application.orchestrator_service import OrchestratorService
 from robot_sync_app.ports.asr_port import ASRPort
 from robot_sync_app.ports.llm_port import LLMPort
 from robot_sync_app.ports.storage_port import StoragePort
+from robot_sync_app.ports.gesture_port import GesturePort
 
 
 class VoiceSessionService:
@@ -22,14 +23,28 @@ class VoiceSessionService:
         llm: LLMPort,
         orchestrator: OrchestratorService,
         storage: StoragePort,
+        gesture_adapters: Optional[Dict[str, GesturePort]] = None,
     ) -> None:
         self._asr = asr
         self._llm = llm
         self._orchestrator = orchestrator
         self._storage = storage
+        self._gesture_adapters = gesture_adapters or {}  # {'stub': ..., 'arduino_serial': ...}
         self._chat_move_side: Optional[str] = None
         self._chat_move_joint: Optional[str] = None
         self._chat_last_cmd: Optional[Dict[str, Any]] = None
+
+    def _enable_servos(self) -> None:
+        """Switch to arduino_serial gesture adapter to enable servo movements"""
+        if "arduino_serial" in self._gesture_adapters:
+            self._orchestrator.set_gesture_adapter(self._gesture_adapters["arduino_serial"])
+            print("✓ Servos enabled")
+
+    def _disable_servos(self) -> None:
+        """Switch to stub gesture adapter to disable servo movements"""
+        if "stub" in self._gesture_adapters:
+            self._orchestrator.set_gesture_adapter(self._gesture_adapters["stub"])
+            print("✓ Servos disabled")
 
     def run(self, intent: str = "chat", max_turns: int = 0) -> None:
         """Main thread handles orchestration, background thread handles RIVA I/O"""
@@ -323,15 +338,19 @@ class VoiceSessionService:
         }
 
     def _run_arm_calibration(self, max_turns: int = 0) -> None:
+        # Enable servos when entering movement mode
+        self._enable_servos()
+        
         print("🎙️ Arm calibration session started. Say 'QUIT' to return to chat.")
         self._say("Arm calibration mode. Short answers only.")
-        self._say("Available commands: wave, fingers open or close, left or right arm moves, stop motion, some more, reverse, main menu, or quit to return to chat.")
-        time.sleep(1.5)
+        time.sleep(0.5)
 
         turn = 0
         last_cmd: Optional[Dict[str, Any]] = None
-        side: Optional[str] = None
-        joint: Optional[str] = None
+        body_part: Optional[str] = None  # "shoulder", "elbow", or "fingers"
+        side: Optional[str] = None       # "LEFT" or "RIGHT"
+        joint: Optional[str] = None      # "SHOULDER1", "SHOULDER2", or "ELBOW"
+        direction: Optional[str] = None  # "UP", "DOWN", "LEFT", "RIGHT", "OPEN", "CLOSE"
 
         while True:
             if max_turns > 0 and turn >= max_turns:
@@ -344,29 +363,30 @@ class VoiceSessionService:
 
             t = user_text.lower().strip()
             t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
+            
+            # Exit conditions
             if t_clean in {"quit", "stop", "exit", "chat mode", "conversation mode", "normal mode"}:
                 self._orchestrator.send_command("stop_all", {})
                 self._say("Calibration ended. Returning to chat mode.")
+                # Disable servos when exiting movement mode
+                self._disable_servos()
                 print("👋 Ending arm calibration")
                 break
 
-            finger = self._parse_finger_command(user_text)
-            if finger:
-                self._orchestrator.send_command("finger_command", finger)
-                self._say("Done. Say left, right, main menu, or quit.")
-                turn += 1
-                continue
-
+            # Main menu reset
             if "main menu" in t_clean or "menu" in t_clean or "enough" in t_clean:
                 last_cmd = None
+                body_part = None
                 side = None
                 joint = None
-                self._say("Main menu. Say left, right, or quit.")
+                direction = None
+                self._say("What do you want me to do?")
                 continue
 
+            # Handle "some more" - amplify last command
             if "some more" in t_clean or t_clean == "more":
                 if not last_cmd:
-                    self._say("No previous move. Main menu. Say left or right.")
+                    self._say("No previous move. What do you want me to do?")
                     continue
                 cmd_amplified = dict(last_cmd)
                 cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
@@ -375,70 +395,176 @@ class VoiceSessionService:
                 turn += 1
                 continue
 
+            # Handle "reverse" - reverse direction
             if "reverse" in t_clean:
                 if not last_cmd:
-                    self._say("No previous move. Main menu. Say left or right.")
+                    self._say("No previous move. What do you want me to do?")
                     continue
                 rev = dict(last_cmd)
-                rev["direction"] = "DOWN" if str(rev.get("direction")) == "UP" else "UP"
+                rev_direction = str(rev.get("direction"))
+                if rev_direction == "UP":
+                    rev["direction"] = "DOWN"
+                elif rev_direction == "DOWN":
+                    rev["direction"] = "UP"
+                elif rev_direction == "LEFT":
+                    rev["direction"] = "RIGHT"
+                elif rev_direction == "RIGHT":
+                    rev["direction"] = "LEFT"
+                elif rev_direction == "OPEN":
+                    rev["direction"] = "CLOSE"
+                elif rev_direction == "CLOSE":
+                    rev["direction"] = "OPEN"
                 self._orchestrator.send_command("arm_calibration_step", rev)
                 last_cmd = rev
                 self._say("Reversed. Say some more, reverse, main menu, or quit.")
                 turn += 1
                 continue
 
-            cmd = self._parse_arm_command(user_text)
-            if cmd:
-                self._orchestrator.send_command("arm_calibration_step", cmd)
-                last_cmd = cmd
-                side = str(cmd["side"])
-                joint = str(cmd["joint"])
+            # ========== STEP 1: Ask "What do you want me to do?" ==========
+            if body_part is None:
+                # Parse body part from user input
+                if "finger" in t_clean or "hand" in t_clean:
+                    body_part = "fingers"
+                    side = None  # Fingers don't need a side
+                    self._say("Do you want me to open or close?")
+                    continue
+                elif "shoulder" in t_clean:
+                    body_part = "shoulder"
+                    # Now parse which side
+                    if "left" in t_clean:
+                        side = "LEFT"
+                        self._say("Main servo, shoulder one, or second servo, shoulder two?")
+                    elif "right" in t_clean:
+                        side = "RIGHT"
+                        self._say("Main servo, shoulder one, or second servo, shoulder two?")
+                    else:
+                        self._say("Left shoulder or right shoulder?")
+                    continue
+                elif "elbow" in t_clean or "elb" in t_clean:
+                    body_part = "elbow"
+                    # Parse which side
+                    if "left" in t_clean:
+                        side = "LEFT"
+                        self._say("Do you want me to open or close?")
+                    elif "right" in t_clean:
+                        side = "RIGHT"
+                        self._say("Do you want me to open or close?")
+                    else:
+                        self._say("Left elbow or right elbow?")
+                    continue
+                else:
+                    self._say("What do you want me to do?")
+                    continue
+
+            # ========== STEP 2: For shoulders, ask "Shoulder 1 or Shoulder 2?" ==========
+            if body_part == "shoulder" and joint is None:
+                if "shoulder 1" in t_clean or "shoulder1" in t_clean or "shoulder one" in t_clean or "main servo" in t_clean or t_clean in {"s1", "one", "1", "main"}:
+                    joint = "SHOULDER1"
+                    self._say("Do you want me to move up or down?")
+                    continue
+                elif "shoulder 2" in t_clean or "shoulder2" in t_clean or "shoulder two" in t_clean or "second servo" in t_clean or t_clean in {"s2", "two", "2", "second"}:
+                    joint = "SHOULDER2"
+                    self._say("Do you want me to move left or right?")
+                    continue
+                elif "left" in t_clean and side is None:
+                    side = "LEFT"
+                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
+                    continue
+                elif "right" in t_clean and side is None:
+                    side = "RIGHT"
+                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
+                    continue
+                else:
+                    self._say("Main servo, shoulder one, or second servo, shoulder two?")
+                    continue
+
+            # ========== STEP 3: For elbow, ask "Open or close?" ==========
+            if body_part == "elbow" and joint is None:
+                if "left" in t_clean and side is None:
+                    side = "LEFT"
+                    self._say("Do you want me to open or close?")
+                    continue
+                elif "right" in t_clean and side is None:
+                    side = "RIGHT"
+                    self._say("Do you want me to open or close?")
+                    continue
+                else:
+                    joint = "ELBOW"  # Default, will ask for action next
+                    self._say("Do you want me to open or close?")
+                    continue
+
+            # ========== STEP 4: Get direction/action ==========
+            if direction is None:
+                if body_part == "shoulder" and joint == "SHOULDER1":
+                    # Shoulder 1: up or down
+                    if "up" in t_clean or "raise" in t_clean:
+                        direction = "UP"
+                    elif "down" in t_clean or "lower" in t_clean:
+                        direction = "DOWN"
+                    else:
+                        self._say("Do you want me to move up or down?")
+                        continue
+                elif body_part == "shoulder" and joint == "SHOULDER2":
+                    # Shoulder 2: left or right
+                    if "left" in t_clean:
+                        direction = "LEFT"
+                    elif "right" in t_clean:
+                        direction = "RIGHT"
+                    else:
+                        self._say("Do you want me to move left or right?")
+                        continue
+                elif body_part == "elbow":
+                    # Elbow: open or close
+                    if "open" in t_clean:
+                        direction = "OPEN"
+                    elif "close" in t_clean:
+                        direction = "CLOSE"
+                    else:
+                        self._say("Do you want me to open or close?")
+                        continue
+                elif body_part == "fingers":
+                    # Fingers: open or close
+                    if "open" in t_clean:
+                        direction = "OPEN"
+                    elif "close" in t_clean:
+                        direction = "CLOSE"
+                    else:
+                        self._say("Do you want me to open or close?")
+                        continue
+
+            # ========== EXECUTE COMMAND ==========
+            if body_part == "fingers":
+                # Handle finger commands
+                action = "OPEN" if direction == "OPEN" else "CLOSE"
+                finger_cmd = {"action": action, "side": "BOTH"}
+                self._orchestrator.send_command("finger_command", finger_cmd)
+                last_cmd = {"action": action, "side": "BOTH"}
                 self._say("Done. Say some more, reverse, main menu, or quit.")
+                # Reset state for next command
+                body_part = None
+                side = None
+                joint = None
+                direction = None
+                turn += 1
+                continue
+            elif body_part in {"shoulder", "elbow"} and side and joint and direction:
+                # Handle arm commands
+                arm_cmd = {
+                    "side": side,
+                    "joint": joint,
+                    "direction": direction,
+                    "amount": 15,
+                }
+                self._orchestrator.send_command("arm_calibration_step", arm_cmd)
+                last_cmd = dict(arm_cmd)
+                self._say("Done. Say some more, reverse, main menu, or quit.")
+                # Reset state for next command
+                body_part = None
+                side = None
+                joint = None
+                direction = None
                 turn += 1
                 continue
 
-            if side is None:
-                if "left" in t_clean:
-                    side = "LEFT"
-                    self._say("Say elbow, shoulder one, or shoulder two.")
-                elif "right" in t_clean:
-                    side = "RIGHT"
-                    self._say("Say elbow, shoulder one, or shoulder two.")
-                else:
-                    self._say("Main menu. Say left, right, or quit.")
-                continue
-
-            if joint is None:
-                if "elbow" in t_clean or "elb" in t_clean:
-                    joint = "ELBOW"
-                    self._say("Say up or down.")
-                elif "shoulder 1" in t_clean or "shoulder1" in t_clean or "shoulder one" in t_clean or "first shoulder" in t_clean or t_clean in {"s1", "one", "1"}:
-                    joint = "SHOULDER1"
-                    self._say("Say up or down.")
-                elif "shoulder 2" in t_clean or "shoulder2" in t_clean or "shoulder two" in t_clean or "second shoulder" in t_clean or t_clean in {"s2", "two", "2", "to"}:
-                    joint = "SHOULDER2"
-                    self._say("Say up or down.")
-                else:
-                    self._say("Say elbow, shoulder one, or shoulder two.")
-                continue
-
-            direction = None
-            if "up" in t_clean or "raise" in t_clean:
-                direction = "UP"
-            elif "down" in t_clean or "lower" in t_clean:
-                direction = "DOWN"
-
-            if not direction:
-                self._say("Say up or down.")
-                continue
-
-            cmd = {
-                "side": side,
-                "joint": joint,
-                "direction": direction,
-                "amount": 15,
-            }
-            self._orchestrator.send_command("arm_calibration_step", cmd)
-            last_cmd = cmd
-            self._say("Done. Say some more, reverse, main menu, or quit.")
-            turn += 1
+            # Fallback if something goes wrong
+            self._say("What do you want me to do?")
