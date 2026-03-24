@@ -19,7 +19,7 @@ class OpenCVLCDFaceAdapter(FacePort):
     """
 
     def __init__(self, width: int = 1280, height: int = 800,
-                 assets_path: str = "/home/reza/cropped_animation_frames"):
+                 assets_path: str = "/home/reza/cropped_animation_frames_sampled"):
         """
         Initialize the HDMI face display with animated expressions using OpenCV.
         
