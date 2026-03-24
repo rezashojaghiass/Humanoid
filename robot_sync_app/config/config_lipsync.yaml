@@ -65,6 +65,7 @@ face:
   height: 800
   fullscreen: true
   default_expression: neutral
+  assets_path: /home/reza/cropped_animation_frames_lipsync_3frames  # 3 frames per expression (1, 6, 11)
   expressions:
     - neutral
     - happy

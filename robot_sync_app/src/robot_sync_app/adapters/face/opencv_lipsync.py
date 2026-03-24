@@ -16,7 +16,7 @@ class OpenCVLipSyncFaceAdapter(FacePort):
     """
 
     def __init__(self, width: int = 1280, height: int = 800,
-                 assets_path: str = "/home/reza/cropped_animation_frames_lipsync"):
+                 assets_path: str = "/home/reza/cropped_animation_frames_lipsync_3frames"):
         """
         Initialize lip-sync face display.
         
