@@ -49,6 +49,7 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             self.current_frame = None
             self._animation_thread = None
             self._animation_lock = threading.Lock()
+            self._pause_animation = False  # Pause flag for expression playback
             self._frame_queue = []  # Queue of frames to display
             self._speaking = False
             self._speech_text = ""
@@ -57,13 +58,22 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             cv2.namedWindow('Robot Face', cv2.WND_PROP_FULLSCREEN)
             cv2.setWindowProperty('Robot Face', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             
-            # Hide mouse cursor
+            # Register mouse callback to ignore mouse (prevents cursor visibility)
+            cv2.setMouseCallback('Robot Face', lambda *args: None)
+            
+            # Hide mouse cursor (call multiple times to ensure it works)
+            self._hide_cursor()
+            time.sleep(0.2)
             self._hide_cursor()
             
             # Display initial neutral frame
             if self.neutral_frame is not None:
                 cv2.imshow('Robot Face', self.neutral_frame)
                 cv2.waitKey(1)
+            
+            # Hide cursor again after displaying window
+            time.sleep(0.1)
+            self._hide_cursor()
             
             # Start background animation thread
             self._animation_thread = threading.Thread(target=self._animation_loop, daemon=True)
@@ -78,18 +88,52 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             self.neutral_frame = None
 
     def _hide_cursor(self) -> None:
-        """Hide mouse cursor completely using X11 tools."""
+        """Hide mouse cursor completely using display/X11 methods."""
+        import subprocess
+        import os
+        
+        # Method 1: Set blank cursor using X11 via xsetroot
+        methods = [
+            # xsetroot with /dev/null cursor
+            lambda: subprocess.run(['xsetroot', '-cursor', '/dev/null', '/dev/null'],
+                                 stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1),
+            # Move cursor far off-screen using xdotool
+            lambda: subprocess.run(['xdotool', 'mousemove', '10000', '10000'],
+                                 stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1),
+            # Use wmctrl to hide cursor decorations
+            lambda: subprocess.run(['wmctrl', '-r', ':ACTIVE:', '-b', 'add,above'],
+                                 stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1),
+            # Try creating invisible cursor with ImageMagick if available
+            lambda: self._create_invisible_cursor_image(),
+        ]
+        
+        for method in methods:
+            try:
+                method()
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                continue
+        
+        # Also disable mouse in the display manager
+        try:
+            display = os.environ.get('DISPLAY', ':0')
+            subprocess.run(f"DISPLAY={display} xset m 0 0", shell=True,
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
+        except Exception:
+            pass
+    
+    def _create_invisible_cursor_image(self) -> None:
+        """Create an invisible cursor image."""
         try:
             import subprocess
+            # Create 1x1 transparent PNG cursor
+            subprocess.run(['convert', '-size', '1x1', 'xc:transparent', 
+                          '/tmp/invisible_cursor.png'],
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
+            # Set it as cursor
             subprocess.run(['xsetroot', '-cursor_name', 'none'],
-                         check=False, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
         except Exception:
-            try:
-                import subprocess
-                subprocess.run(['xdotool', 'mousemove', '-1', '-1'],
-                             check=False, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
-            except:
-                pass
+            pass
 
     def _load_animations(self) -> dict:
         """Load all animation frame sequences."""
@@ -204,6 +248,11 @@ class OpenCVLipSyncFaceAdapter(FacePort):
         """Background thread animation loop."""
         while self.running:
             try:
+                # Skip if paused for expression playback
+                if self._pause_animation:
+                    time.sleep(0.01)
+                    continue
+                
                 with self._animation_lock:
                     if self._frame_queue:
                         frame, frame_time = self._frame_queue.pop(0)
@@ -248,6 +297,95 @@ class OpenCVLipSyncFaceAdapter(FacePort):
         except Exception as e:
             print(f"[FACE] Cleanup error: {e}")
 
-    def __del__(self):
-        """Ensure cleanup on deletion."""
-        self.cleanup()
+    def play_expression_sequence(self, expression_name: str, frame_indices: list, duration: float = 2.0) -> None:
+        """
+        Play a sequence of frames from an expression.
+        Used for facial expression mode animations.
+        
+        Args:
+            expression_name: Name of expression (e.g., "Smile", "Sad")
+            frame_indices: List of frame numbers to play (1-based)
+            duration: Total time in seconds to play the sequence
+        """
+        # Load from the FULL frame set (30 frames per expression)
+        full_assets_path = "/home/reza/cropped_animation_frames"
+        expr_path = Path(full_assets_path) / expression_name
+        
+        if not expr_path.exists():
+            print(f"[FACE] Expression not found: {expr_path}")
+            return
+        
+        # Get all PNG files sorted numerically by frame number
+        all_files = glob.glob(os.path.join(str(expr_path), "*.png"))
+        
+        # Sort by frame number extracted from filename (e.g., frame_0001.png)
+        def get_frame_number(filepath):
+            try:
+                filename = os.path.basename(filepath)
+                # Extract number from frame_XXXX.png format
+                import re
+                match = re.search(r'frame_(\d+)', filename)
+                if match:
+                    return int(match.group(1))
+            except:
+                pass
+            return 0
+        
+        all_files = sorted(all_files, key=get_frame_number)
+        
+        if not all_files:
+            print(f"[FACE] No frames found in {expr_path}")
+            return
+        
+        # Load and prepare frames
+        sequence = []
+        for frame_idx in frame_indices:
+            # Frame indices are 1-based, convert to 0-based file index
+            file_idx = frame_idx - 1
+            if 0 <= file_idx < len(all_files):
+                try:
+                    frame = cv2.imread(all_files[file_idx])
+                    if frame is not None:
+                        frame = cv2.resize(frame, (self.width, self.height))
+                        sequence.append(frame)
+                        print(f"[FACE] Loaded {expression_name} frame {frame_idx}")
+                except Exception as e:
+                    print(f"[FACE] Error loading frame {frame_idx}: {e}")
+            else:
+                print(f"[FACE] Frame index {frame_idx} out of range (max: {len(all_files)})")
+        
+        if not sequence:
+            print(f"[FACE] No valid frames loaded for {expression_name}")
+            return
+        
+        print(f"[FACE] Playing {expression_name} sequence ({len(sequence)} frames, {duration:.1f}s)")
+        
+        # Pause background animation thread - take ownership of window
+        self._pause_animation = True
+        time.sleep(0.1)  # Let animation loop pause
+        
+        # Display frames directly on main window with timing
+        frame_duration = duration / len(sequence) if sequence else 0.1
+        for i, frame in enumerate(sequence):
+            try:
+                # Display frame on existing 'Robot Face' window
+                cv2.imshow('Robot Face', frame)
+                cv2.waitKey(int(frame_duration * 1000))  # Display for frame_duration milliseconds
+                print(f"[FACE] Displayed {expression_name} frame {i+1}/{len(sequence)}")
+            except Exception as e:
+                print(f"[FACE] Error displaying frame: {e}")
+        
+        # Return to neutral after sequence
+        try:
+            cv2.imshow('Robot Face', self.neutral_frame)
+            cv2.waitKey(100)
+        except Exception as e:
+            print(f"[FACE] Error displaying neutral frame: {e}")
+        
+        # Resume background animation thread
+        self._pause_animation = False
+        
+        print(f"[FACE] {expression_name} sequence complete")
+
+
+

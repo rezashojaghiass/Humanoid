@@ -85,6 +85,18 @@ class VoiceSessionService:
                         should_exit.set()
                         break
 
+                    if self._is_facial_expression_intent(user_text):
+                        self._orchestrator.run_once(
+                            text="Switching to facial expression mode.",
+                            intent="arm_calibration",
+                        )
+                        self._run_facial_expression_mode(max_turns=0)
+                        self._orchestrator.run_once(
+                            text="Back to chat mode.",
+                            intent="arm_calibration",
+                        )
+                        continue
+
                     if self._is_movement_intent(user_text):
                         self._orchestrator.run_once(
                             text="Switching to movement mode.",
@@ -150,6 +162,14 @@ class VoiceSessionService:
 
         movement_words = {"move", "movement", "arm", "elbow", "shoulder", "fingers", "finger", "hand", "hands", "reverse", "some more", "more", "main menu"}
         return any(w in t for w in movement_words)
+
+    def _is_facial_expression_intent(self, text: str) -> bool:
+        t = " ".join(text.lower().strip().replace(".", " ").replace(",", " ").split())
+        if t in {"facial expression mode", "expression mode", "face mode", "emotion mode"}:
+            return True
+        
+        expressions = {"happy", "sad", "surprised", "surprise", "surprised look", "sad look", "happy look"}
+        return any(e in t for e in expressions)
 
     def _parse_finger_command(self, text: str) -> Optional[Dict[str, Any]]:
         t = text.lower().strip()
@@ -592,3 +612,93 @@ class VoiceSessionService:
 
             # Fallback if something goes wrong
             self._say("Left hand, right hand, or both hands?")
+
+    def _run_facial_expression_mode(self, max_turns: int = 0) -> None:
+        """
+        Facial expression mode: Play full-frame sequences for emotions.
+        When user says "happy", plays Smile frames 1,5,10,15,20,25,30
+        When user says "sad", plays Sad frames 1,5,10,15,20,25,30
+        And so on for other expressions.
+        """
+        print("🎙️ Facial expression mode started. Say 'QUIT' to return to chat.")
+        self._say("Facial expression mode. Say an emotion: happy, sad, or surprised.")
+        time.sleep(0.5)
+
+        turn = 0
+        
+        # Map expressions to frame sequences - play all 30 frames
+        expression_frames = {
+            "happy": ("Smile", list(range(1, 31))),      # Frames 1-30
+            "sad": ("Sad", list(range(1, 31))),          # Frames 1-30
+            "surprised": ("Surprise", list(range(1, 31))), # Frames 1-30
+            "surprise": ("Surprise", list(range(1, 31))), # Frames 1-30
+        }
+
+        while True:
+            if max_turns > 0 and turn >= max_turns:
+                print("✓ Reached max turns")
+                break
+
+            user_text = self._asr.listen_and_transcribe()
+            if not user_text:
+                continue
+
+            t = user_text.lower().strip()
+            t_clean = " ".join(t.replace(".", " ").replace(",", " ").split())
+            
+            # Exit conditions
+            if t_clean in {"quit", "stop", "exit", "chat mode", "conversation mode", "normal mode"}:
+                self._say("Facial expression mode ended. Returning to chat mode.")
+                print("👋 Ending facial expression mode")
+                break
+
+            # Main menu reset
+            if "main menu" in t_clean or "menu" in t_clean:
+                self._say("Say an emotion: happy, sad, or surprised.")
+                continue
+
+            # Check for emotion request
+            matched_emotion = None
+            for emotion_key, (expr_name, frames) in expression_frames.items():
+                if emotion_key in t_clean:
+                    matched_emotion = emotion_key
+                    break
+            
+            if matched_emotion:
+                expr_name, frame_indices = expression_frames[matched_emotion]
+                
+                # Start animation in background thread immediately (no announcement)
+                animation_thread = threading.Thread(
+                    target=self._play_expression_sequence,
+                    args=(expr_name, frame_indices),
+                    daemon=True
+                )
+                animation_thread.start()
+                
+                # Wait for animation to complete before continuing
+                animation_thread.join()
+                
+                self._say("Done. Say another emotion, main menu, or quit.")
+                turn += 1
+                continue
+
+            # If no emotion matched
+            self._say("Say an emotion: happy, sad, or surprised.")
+
+    def _play_expression_sequence(self, expression_name: str, frame_indices: list) -> None:
+        """
+        Play a sequence of frames from an expression directory.
+        Args:
+            expression_name: Name of expression folder (e.g., "Smile", "Sad")
+            frame_indices: List of frame indices to display (e.g., [1, 5, 10, ...])
+        """
+        # Use the orchestrator's face adapter if it has play_expression_sequence method
+        if hasattr(self._orchestrator, '_face'):
+            face = self._orchestrator._face
+            if hasattr(face, 'play_expression_sequence'):
+                face.play_expression_sequence(expression_name, frame_indices, duration=2.0)
+                return
+        
+        # Fallback: just log the expression
+        print(f"[EXPR] Playing {expression_name} with frames {frame_indices}")
+
