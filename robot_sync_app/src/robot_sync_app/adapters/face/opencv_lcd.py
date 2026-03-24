@@ -53,12 +53,8 @@ class OpenCVLCDFaceAdapter(FacePort):
             cv2.namedWindow('Robot Face', cv2.WND_PROP_FULLSCREEN)
             cv2.setWindowProperty('Robot Face', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             
-            # Hide mouse cursor when displaying images
-            try:
-                import subprocess
-                subprocess.run(['xdotool', 'mousemove', '640', '400'], check=False, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass  # xdotool not available, skip
+            # Hide mouse cursor
+            self._hide_cursor()
             
             # Display initial black frame
             black_frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
@@ -75,6 +71,22 @@ class OpenCVLCDFaceAdapter(FacePort):
         except Exception as e:
             print(f"[FACE] Failed to initialize OpenCV display: {e}")
             self.expressions = {}
+
+    def _hide_cursor(self) -> None:
+        """Hide mouse cursor completely using X11 tools."""
+        try:
+            import subprocess
+            # Use xsetroot to create invisible cursor
+            subprocess.run(['xsetroot', '-cursor_name', 'none'],
+                         check=False, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
+        except Exception as e:
+            # Fallback: just move cursor off-screen
+            try:
+                import subprocess
+                subprocess.run(['xdotool', 'mousemove', '-1', '-1'],
+                             check=False, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
+            except:
+                pass  # xdotool not available
 
     def _load_animations(self) -> dict:
         """Load all animation frame sequences from assets folder."""

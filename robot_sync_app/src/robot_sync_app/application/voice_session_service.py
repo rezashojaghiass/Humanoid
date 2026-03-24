@@ -389,17 +389,24 @@ class VoiceSessionService:
                 if not last_cmd:
                     self._say("No previous move. Left hand, right hand, or both hands?")
                     continue
-                cmd_amplified = dict(last_cmd)
-                cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
                 
-                # Handle BOTH arms for "some more"
-                if last_cmd.get("side") == "BOTH" and "joint" in last_cmd:
-                    for arm_side in ["LEFT", "RIGHT"]:
-                        cmd_to_send = dict(cmd_amplified)
-                        cmd_to_send["side"] = arm_side
-                        self._orchestrator.send_command("arm_calibration_step", cmd_to_send)
+                # Check if it's a finger command or arm command
+                if "action" in last_cmd:
+                    # Finger command
+                    self._orchestrator.send_command("finger_command", last_cmd)
                 else:
-                    self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
+                    # Arm command - amplify amount
+                    cmd_amplified = dict(last_cmd)
+                    cmd_amplified["amount"] = max(1, min(100, cmd_amplified.get("amount", 15) * 5))
+                    
+                    # Handle BOTH arms for "some more"
+                    if last_cmd.get("side") == "BOTH":
+                        for arm_side in ["LEFT", "RIGHT"]:
+                            cmd_to_send = dict(cmd_amplified)
+                            cmd_to_send["side"] = arm_side
+                            self._orchestrator.send_command("arm_calibration_step", cmd_to_send)
+                    else:
+                        self._orchestrator.send_command("arm_calibration_step", cmd_amplified)
                 
                 self._say("Done. Say some more, reverse, main menu, or quit.")
                 turn += 1
@@ -410,31 +417,38 @@ class VoiceSessionService:
                 if not last_cmd:
                     self._say("No previous move. Left hand, right hand, or both hands?")
                     continue
-                rev = dict(last_cmd)
-                rev_direction = str(rev.get("direction"))
-                if rev_direction == "UP":
-                    rev["direction"] = "DOWN"
-                elif rev_direction == "DOWN":
-                    rev["direction"] = "UP"
-                elif rev_direction == "LEFT":
-                    rev["direction"] = "RIGHT"
-                elif rev_direction == "RIGHT":
-                    rev["direction"] = "LEFT"
-                elif rev_direction == "OPEN":
-                    rev["direction"] = "CLOSE"
-                elif rev_direction == "CLOSE":
-                    rev["direction"] = "OPEN"
                 
-                # Handle BOTH arms for "reverse"
-                if last_cmd.get("side") == "BOTH" and "joint" in last_cmd:
-                    for arm_side in ["LEFT", "RIGHT"]:
-                        rev_to_send = dict(rev)
-                        rev_to_send["side"] = arm_side
-                        self._orchestrator.send_command("arm_calibration_step", rev_to_send)
+                # Check if it's a finger command or arm command
+                if "action" in last_cmd:
+                    # Finger command - reverse action
+                    rev = dict(last_cmd)
+                    rev["action"] = "CLOSE" if str(rev.get("action")) == "OPEN" else "OPEN"
+                    self._orchestrator.send_command("finger_command", rev)
+                    last_cmd = rev
                 else:
-                    self._orchestrator.send_command("arm_calibration_step", rev)
+                    # Arm command - reverse direction
+                    rev = dict(last_cmd)
+                    rev_direction = str(rev.get("direction"))
+                    if rev_direction == "UP":
+                        rev["direction"] = "DOWN"
+                    elif rev_direction == "DOWN":
+                        rev["direction"] = "UP"
+                    elif rev_direction == "LEFT":
+                        rev["direction"] = "RIGHT"
+                    elif rev_direction == "RIGHT":
+                        rev["direction"] = "LEFT"
+                    
+                    # Handle BOTH arms for "reverse"
+                    if last_cmd.get("side") == "BOTH":
+                        for arm_side in ["LEFT", "RIGHT"]:
+                            rev_to_send = dict(rev)
+                            rev_to_send["side"] = arm_side
+                            self._orchestrator.send_command("arm_calibration_step", rev_to_send)
+                    else:
+                        self._orchestrator.send_command("arm_calibration_step", rev)
+                    
+                    last_cmd = rev
                 
-                last_cmd = rev
                 self._say("Reversed. Say some more, reverse, main menu, or quit.")
                 turn += 1
                 continue
