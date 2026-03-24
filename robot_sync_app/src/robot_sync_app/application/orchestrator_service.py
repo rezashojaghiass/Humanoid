@@ -42,14 +42,23 @@ class OrchestratorService:
             if hasattr(self._speech, '_last_audio_duration'):
                 audio_duration = self._speech._last_audio_duration
             
-            self._face.set_expression(plan.face_expression, audio_duration)
+            # For lip-sync mode, start lip-sync animation
+            if hasattr(self._face, 'speak'):
+                self._face.speak(plan.speech_text, audio_duration)
+            else:
+                # For traditional mode, set expression
+                self._face.set_expression(plan.face_expression, audio_duration)
             if plan.gesture_name:
                 self._gesture.start_gesture(plan.gesture_name)
 
         def on_end() -> None:
             if plan.gesture_name:
                 self._gesture.stop_gesture(plan.gesture_name)
-            self._face.set_expression(self._neutral)
+            # For lip-sync mode, return to neutral
+            if hasattr(self._face, 'speak_done'):
+                self._face.speak_done()
+            else:
+                self._face.set_expression(self._neutral)
 
         self._speech.speak(plan.speech_text, on_start=on_start, on_end=on_end)
 
