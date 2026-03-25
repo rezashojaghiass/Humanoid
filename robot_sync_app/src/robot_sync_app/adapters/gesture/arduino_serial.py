@@ -94,7 +94,7 @@ class ArduinoSerialGestureAdapter(GesturePort):
         if name == "finger_command":
             action = str(params.get("action", "")).upper()
             side = str(params.get("side", "BOTH")).upper()
-            if action not in {"OPEN", "CLOSE", "CLOSE_SEQ", "WAVE"}:
+            if action not in {"OPEN", "CLOSE", "CLOSE_SEQ", "CLOSE_SEQ_ARMS", "WAVE"}:
                 raise RuntimeError(f"Invalid finger action: {action}")
             if side not in {"LEFT", "RIGHT", "BOTH"}:
                 raise RuntimeError(f"Invalid finger side: {side}")

@@ -478,7 +478,7 @@ class VoiceSessionService:
                 if "both" in t_clean:
                     # When user says "both hands", close both hands (funny mode)
                     self._say("Closing both hands!")
-                    self._orchestrator.send_command("finger_command", {"action": "CLOSE_SEQ", "side": "BOTH"})
+                    self._orchestrator.send_command("finger_command", {"action": "CLOSE_SEQ_ARMS", "side": "BOTH"})
                     self._say("How did you like that? Left hand, right hand, or both hands again?")
                     continue
                 elif "left" in t_clean:

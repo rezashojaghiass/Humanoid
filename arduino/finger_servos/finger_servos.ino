@@ -644,6 +644,62 @@ void setFingersCloseSequential() {
   setFingersOpen();
 }
 
+// Sequential finger closing with right elbow movement (Mexican wave style)
+void setFingersCloseSequentialWithArms() {
+  const unsigned long PHASE_DELAY = 120;
+  const unsigned long HALF_MOVE = 800;
+  const unsigned long UPDATE_MS = 20;
+  unsigned long t0 = millis();
+  unsigned long totalDuration = (9 * PHASE_DELAY) + (2 * HALF_MOVE);
+  unsigned long lastUpdate = 0;
+  
+  // Attach right elbow if not attached
+  if (!sRElb.attached()) {
+    powerOn(R_ELB_PWR);
+    sRElb.attach(R_ELB_PIN);
+  }
+  
+  while (millis() - t0 < totalDuration) {
+    unsigned long now = millis();
+    unsigned long elapsed = now - t0;
+    
+    if (now - lastUpdate < UPDATE_MS) continue;
+    lastUpdate = now;
+    
+    // ========== FINGER WAVE ==========
+    long dt[10];
+    for (int i = 0; i < 10; i++) {
+      dt[i] = (long)(now - (t0 + (unsigned long)i * PHASE_DELAY));
+    }
+    
+    sThumb.writeMicroseconds(  wavePos(THUMB_OPEN,  THUMB_CLOSE,  dt[0]) );
+    sIndex.writeMicroseconds(  wavePos(INDEX_OPEN,  INDEX_CLOSE,  dt[1]) );
+    sMiddle.writeMicroseconds( wavePos(MIDDLE_OPEN, MIDDLE_CLOSE, dt[2]) );
+    sRing.writeMicroseconds(   wavePos(RING_OPEN,   RING_CLOSE,   dt[3]) );
+    sPinky.writeMicroseconds(  wavePos(PINKY_OPEN,  PINKY_CLOSE,  dt[4]) );
+    
+    sLThumb.writeMicroseconds(  wavePos(LTHUMB_OPEN,  LTHUMB_CLOSE,  dt[5]) );
+    sLIndex.writeMicroseconds(  wavePos(LINDEX_OPEN,  LINDEX_CLOSE,  dt[6]) );
+    sLMiddle.writeMicroseconds( wavePos(LMIDDLE_OPEN, LMIDDLE_CLOSE, dt[7]) );
+    sLRing.writeMicroseconds(   wavePos(LRING_OPEN,   LRING_CLOSE,   dt[8]) );
+    sLPinky.writeMicroseconds(  wavePos(LPINKY_OPEN,  LPINKY_CLOSE,  dt[9]) );
+    
+    // ========== RIGHT ELBOW ==========
+    // Open at start, close in middle, open at end (same as fingers)
+    if (elapsed < HALF_MOVE) {
+      // First half: closing phase - elbow closes
+      sRElb.writeMicroseconds(1800);  // RELB_CLOSE
+    } else {
+      // Second half: opening phase - elbow opens
+      sRElb.writeMicroseconds(1200);  // RELB_OPEN
+    }
+  }
+  
+  // Return to neutral positions
+  setFingersOpen();
+  sRElb.writeMicroseconds(1200);  // RELB_OPEN
+}
+
 void setRightFingersCloseSequential() {
   const unsigned long PHASE_DELAY = 120;
   const unsigned long HALF_MOVE = 800;
@@ -742,6 +798,22 @@ void processFingerCmd(const String &line) {
       setLeftFingersCloseSequential();
     }
     Serial.println("ACK:FINGER:CLOSE_SEQ");
+    return;
+  }
+
+  if (action == "CLOSE_SEQ_ARMS") {
+    // Mexican wave with arm movement (only for BOTH hands)
+    if (doRight && doLeft) {
+      setFingersCloseSequentialWithArms();
+    } else {
+      // Fall back to sequential fingers if not both hands
+      if (doRight) {
+        setRightFingersCloseSequential();
+      } else if (doLeft) {
+        setLeftFingersCloseSequential();
+      }
+    }
+    Serial.println("ACK:FINGER:CLOSE_SEQ_ARMS");
     return;
   }
 
