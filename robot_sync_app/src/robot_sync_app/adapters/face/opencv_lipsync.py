@@ -35,6 +35,9 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             self.expressions = self._load_animations()
             self.neutral_frame = self._load_neutral_frame()
             
+            # Pre-load full expression frames for facial expression mode (eliminates disk I/O latency)
+            self.full_expressions = self._load_full_expression_frames()
+            
             # Vowel to expression mapping
             self.vowel_map = {
                 'a': 'AA',
@@ -181,6 +184,54 @@ class OpenCVLipSyncFaceAdapter(FacePort):
                 return frame
         return None
 
+    def _load_full_expression_frames(self) -> dict:
+        """Pre-load all full expression frames (30 frames each) to eliminate disk I/O latency."""
+        full_expressions = {}
+        full_assets_path = "/home/reza/cropped_animation_frames"
+        
+        if not os.path.exists(full_assets_path):
+            print(f"[FACE] Full expression frames path not found: {full_assets_path}")
+            return full_expressions
+        
+        # Load each expression folder
+        for expr_dir in ["Smile", "Sad", "Surprise"]:
+            expr_path = os.path.join(full_assets_path, expr_dir)
+            
+            if not os.path.isdir(expr_path):
+                continue
+            
+            frames = []
+            frame_files = glob.glob(os.path.join(expr_path, "*.png"))
+            
+            # Sort by frame number (frame_0001.png -> 1)
+            def get_frame_number(filepath):
+                try:
+                    filename = os.path.basename(filepath)
+                    match = re.search(r'frame_(\d+)', filename)
+                    if match:
+                        return int(match.group(1))
+                except:
+                    pass
+                return 0
+            
+            frame_files = sorted(frame_files, key=get_frame_number)
+            
+            for frame_file in frame_files:
+                try:
+                    frame = cv2.imread(frame_file)
+                    if frame is not None:
+                        if frame.shape != (self.height, self.width, 3):
+                            frame = cv2.resize(frame, (self.width, self.height))
+                        frames.append(frame)
+                except Exception as e:
+                    print(f"[FACE] Error loading expression frame {frame_file}: {e}")
+            
+            if frames:
+                full_expressions[expr_dir] = frames
+                print(f"[FACE] Pre-loaded '{expr_dir}' expression: {len(frames)} frames")
+        
+        return full_expressions
+
     def _detect_vowels(self, text: str) -> list:
         """Detect vowels in text and return frame sequence."""
         vowels = []
@@ -299,7 +350,7 @@ class OpenCVLipSyncFaceAdapter(FacePort):
 
     def play_expression_sequence(self, expression_name: str, frame_indices: list, duration: float = 2.0) -> None:
         """
-        Play a sequence of frames from an expression.
+        Play a sequence of frames from a pre-loaded expression (zero disk I/O latency).
         Used for facial expression mode animations.
         
         Args:
@@ -307,62 +358,34 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             frame_indices: List of frame numbers to play (1-based)
             duration: Total time in seconds to play the sequence
         """
-        # Load from the FULL frame set (30 frames per expression)
-        full_assets_path = "/home/reza/cropped_animation_frames"
-        expr_path = Path(full_assets_path) / expression_name
-        
-        if not expr_path.exists():
-            print(f"[FACE] Expression not found: {expr_path}")
+        # Use pre-loaded frames - no disk I/O during playback
+        if expression_name not in self.full_expressions:
+            print(f"[FACE] Expression not pre-loaded: {expression_name}")
             return
         
-        # Get all PNG files sorted numerically by frame number
-        all_files = glob.glob(os.path.join(str(expr_path), "*.png"))
+        all_frames = self.full_expressions[expression_name]
         
-        # Sort by frame number extracted from filename (e.g., frame_0001.png)
-        def get_frame_number(filepath):
-            try:
-                filename = os.path.basename(filepath)
-                # Extract number from frame_XXXX.png format
-                import re
-                match = re.search(r'frame_(\d+)', filename)
-                if match:
-                    return int(match.group(1))
-            except:
-                pass
-            return 0
-        
-        all_files = sorted(all_files, key=get_frame_number)
-        
-        if not all_files:
-            print(f"[FACE] No frames found in {expr_path}")
+        if not all_frames:
+            print(f"[FACE] No frames available for {expression_name}")
             return
         
-        # Load and prepare frames
+        # Build sequence from pre-loaded frames
         sequence = []
         for frame_idx in frame_indices:
-            # Frame indices are 1-based, convert to 0-based file index
-            file_idx = frame_idx - 1
-            if 0 <= file_idx < len(all_files):
-                try:
-                    frame = cv2.imread(all_files[file_idx])
-                    if frame is not None:
-                        frame = cv2.resize(frame, (self.width, self.height))
-                        sequence.append(frame)
-                        print(f"[FACE] Loaded {expression_name} frame {frame_idx}")
-                except Exception as e:
-                    print(f"[FACE] Error loading frame {frame_idx}: {e}")
+            # Frame indices are 1-based, convert to 0-based
+            idx = frame_idx - 1
+            if 0 <= idx < len(all_frames):
+                sequence.append(all_frames[idx])
             else:
-                print(f"[FACE] Frame index {frame_idx} out of range (max: {len(all_files)})")
+                print(f"[FACE] Frame index {frame_idx} out of range (max: {len(all_frames)})")
         
         if not sequence:
-            print(f"[FACE] No valid frames loaded for {expression_name}")
+            print(f"[FACE] No valid frames for {expression_name}")
             return
-        
-        print(f"[FACE] Playing {expression_name} sequence ({len(sequence)} frames, {duration:.1f}s)")
         
         # Pause background animation thread - take ownership of window
         self._pause_animation = True
-        time.sleep(0.1)  # Let animation loop pause
+        time.sleep(0.05)  # Brief pause to let animation loop stop
         
         # Display frames directly on main window with timing
         frame_duration = duration / len(sequence) if sequence else 0.1
@@ -371,7 +394,6 @@ class OpenCVLipSyncFaceAdapter(FacePort):
                 # Display frame on existing 'Robot Face' window
                 cv2.imshow('Robot Face', frame)
                 cv2.waitKey(int(frame_duration * 1000))  # Display for frame_duration milliseconds
-                print(f"[FACE] Displayed {expression_name} frame {i+1}/{len(sequence)}")
             except Exception as e:
                 print(f"[FACE] Error displaying frame: {e}")
         
