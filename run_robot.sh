@@ -1,7 +1,6 @@
 #!/bin/bash
 # Run Humanoid Robot with Lip-Sync Animation & Facial Expression Mode
-# Features: Baseline lip-sync (frames 1,4,9), emotion animations, elbow joint fix, latency optimization
-
+# Features: Baseline lip-sync (frames 1,4,9), emotion animations, elbow joint fix, funny mode
 set -e  # Exit on any error
 
 # Environment setup
@@ -15,9 +14,9 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Humanoid Robot - Voice Chat with Animation${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}══════════════════════════════════════════════════════════${NC}"
 
 # Check required paths
 ROBOT_DIR="/home/reza/Humanoid"
@@ -46,6 +45,7 @@ echo -e "${BLUE}Starting robot with:${NC}"
 echo "  - Baseline lip-sync (frames 1, 4, 9)"
 echo "  - Facial expression mode (happy, sad, surprised)"
 echo "  - Movement mode with elbow joint support"
+echo "  - 🎭 FUNNY MODE: Say 'both hands' to trigger fun choreography"
 echo "  - Enhanced cursor hiding"
 echo "  - Pre-loaded expression animations (zero latency)"
 echo ""

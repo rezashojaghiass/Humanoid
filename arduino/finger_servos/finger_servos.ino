@@ -575,6 +575,135 @@ void setLeftFingersClose() {
   sLPinky.writeMicroseconds(LPINKY_CLOSE);
 }
 
+// Helper function for smooth servo movement (like Feb10 code)
+int lerpInt(int a, int b, float t) {
+  return a + (int)((b - a) * t);
+}
+
+// Wave position function from Feb10 - calculates servo position based on elapsed time
+// First 800ms: smooth close (OPEN -> CLOSE)
+// Next 800ms: smooth open (CLOSE -> OPEN)
+int wavePos(int openUs, int closeUs, long dt) {
+  if (dt < 0) return openUs;
+  
+  const unsigned long HALF_MOVE = 800; // 800ms to close or open
+  
+  if ((unsigned long)dt < HALF_MOVE) {
+    // Closing phase: lerp from open to close
+    return lerpInt(openUs, closeUs, (float)dt / (float)HALF_MOVE);
+  }
+  dt -= HALF_MOVE;
+  
+  if ((unsigned long)dt < HALF_MOVE) {
+    // Opening phase: lerp from close to open
+    return lerpInt(closeUs, openUs, (float)dt / (float)HALF_MOVE);
+  }
+  return openUs;
+}
+
+// Sequential finger closing with Feb10 wave pattern
+// Each finger starts 120ms after the previous one
+// Each finger closes over 800ms, then opens over 800ms
+void setFingersCloseSequential() {
+  const unsigned long PHASE_DELAY = 120;  // 120ms between finger starts
+  const unsigned long HALF_MOVE = 800;     // 800ms to close or open
+  const unsigned long UPDATE_MS = 20;      // Update every 20ms
+  unsigned long t0 = millis();             // Animation start time
+  // Total duration: (9 * PHASE_DELAY) because 10th finger starts at 9*120ms, then needs 2*HALF_MOVE to close and open
+  unsigned long totalDuration = (9 * PHASE_DELAY) + (2 * HALF_MOVE); // ~2680ms
+  unsigned long lastUpdate = 0;
+  
+  while (millis() - t0 < totalDuration) {
+    unsigned long now = millis();
+    
+    // Only update every UPDATE_MS
+    if (now - lastUpdate < UPDATE_MS) continue;
+    lastUpdate = now;
+    
+    // Calculate elapsed time for each finger (staggered start times)
+    long dt[10];
+    for (int i = 0; i < 10; i++) {
+      dt[i] = (long)(now - (t0 + (unsigned long)i * PHASE_DELAY));
+    }
+    
+    // Update all 10 finger positions
+    sThumb.writeMicroseconds(  wavePos(THUMB_OPEN,  THUMB_CLOSE,  dt[0]) );
+    sIndex.writeMicroseconds(  wavePos(INDEX_OPEN,  INDEX_CLOSE,  dt[1]) );
+    sMiddle.writeMicroseconds( wavePos(MIDDLE_OPEN, MIDDLE_CLOSE, dt[2]) );
+    sRing.writeMicroseconds(   wavePos(RING_OPEN,   RING_CLOSE,   dt[3]) );
+    sPinky.writeMicroseconds(  wavePos(PINKY_OPEN,  PINKY_CLOSE,  dt[4]) );
+    
+    sLThumb.writeMicroseconds(  wavePos(LTHUMB_OPEN,  LTHUMB_CLOSE,  dt[5]) );
+    sLIndex.writeMicroseconds(  wavePos(LINDEX_OPEN,  LINDEX_CLOSE,  dt[6]) );
+    sLMiddle.writeMicroseconds( wavePos(LMIDDLE_OPEN, LMIDDLE_CLOSE, dt[7]) );
+    sLRing.writeMicroseconds(   wavePos(LRING_OPEN,   LRING_CLOSE,   dt[8]) );
+    sLPinky.writeMicroseconds(  wavePos(LPINKY_OPEN,  LPINKY_CLOSE,  dt[9]) );
+  }
+  
+  // Ensure all fingers end in open position
+  setFingersOpen();
+}
+
+void setRightFingersCloseSequential() {
+  const unsigned long PHASE_DELAY = 120;
+  const unsigned long HALF_MOVE = 800;
+  const unsigned long UPDATE_MS = 20;
+  unsigned long t0 = millis();
+  // Total duration: (4 * PHASE_DELAY) because 5th finger starts at 4*120ms, then needs 2*HALF_MOVE to close and open
+  unsigned long totalDuration = (4 * PHASE_DELAY) + (2 * HALF_MOVE); // ~1920ms
+  unsigned long lastUpdate = 0;
+  
+  while (millis() - t0 < totalDuration) {
+    unsigned long now = millis();
+    
+    if (now - lastUpdate < UPDATE_MS) continue;
+    lastUpdate = now;
+    
+    long dt[5];
+    for (int i = 0; i < 5; i++) {
+      dt[i] = (long)(now - (t0 + (unsigned long)i * PHASE_DELAY));
+    }
+    
+    sThumb.writeMicroseconds(  wavePos(THUMB_OPEN,  THUMB_CLOSE,  dt[0]) );
+    sIndex.writeMicroseconds(  wavePos(INDEX_OPEN,  INDEX_CLOSE,  dt[1]) );
+    sMiddle.writeMicroseconds( wavePos(MIDDLE_OPEN, MIDDLE_CLOSE, dt[2]) );
+    sRing.writeMicroseconds(   wavePos(RING_OPEN,   RING_CLOSE,   dt[3]) );
+    sPinky.writeMicroseconds(  wavePos(PINKY_OPEN,  PINKY_CLOSE,  dt[4]) );
+  }
+  
+  setRightFingersOpen();
+}
+
+void setLeftFingersCloseSequential() {
+  const unsigned long PHASE_DELAY = 120;
+  const unsigned long HALF_MOVE = 800;
+  const unsigned long UPDATE_MS = 20;
+  unsigned long t0 = millis();
+  // Total duration: (4 * PHASE_DELAY) because 5th finger starts at 4*120ms, then needs 2*HALF_MOVE to close and open
+  unsigned long totalDuration = (4 * PHASE_DELAY) + (2 * HALF_MOVE); // ~1920ms
+  unsigned long lastUpdate = 0;
+  
+  while (millis() - t0 < totalDuration) {
+    unsigned long now = millis();
+    
+    if (now - lastUpdate < UPDATE_MS) continue;
+    lastUpdate = now;
+    
+    long dt[5];
+    for (int i = 0; i < 5; i++) {
+      dt[i] = (long)(now - (t0 + (unsigned long)i * PHASE_DELAY));
+    }
+    
+    sLThumb.writeMicroseconds(  wavePos(LTHUMB_OPEN,  LTHUMB_CLOSE,  dt[0]) );
+    sLIndex.writeMicroseconds(  wavePos(LINDEX_OPEN,  LINDEX_CLOSE,  dt[1]) );
+    sLMiddle.writeMicroseconds( wavePos(LMIDDLE_OPEN, LMIDDLE_CLOSE, dt[2]) );
+    sLRing.writeMicroseconds(   wavePos(LRING_OPEN,   LRING_CLOSE,   dt[3]) );
+    sLPinky.writeMicroseconds(  wavePos(LPINKY_OPEN,  LPINKY_CLOSE,  dt[4]) );
+  }
+  
+  setLeftFingersOpen();
+}
+
 void processFingerCmd(const String &line) {
   String action = tokenAt(line, ':', 1);
   String side = tokenAt(line, ':', 2);
@@ -600,6 +729,19 @@ void processFingerCmd(const String &line) {
     if (doRight) setRightFingersClose();
     if (doLeft) setLeftFingersClose();
     Serial.println("ACK:FINGER:CLOSE");
+    return;
+  }
+
+  if (action == "CLOSE_SEQ") {
+    if (doRight && doLeft) {
+      // Both hands: use the unified sequential function for continuous timeline
+      setFingersCloseSequential();
+    } else if (doRight) {
+      setRightFingersCloseSequential();
+    } else if (doLeft) {
+      setLeftFingersCloseSequential();
+    }
+    Serial.println("ACK:FINGER:CLOSE_SEQ");
     return;
   }
 
