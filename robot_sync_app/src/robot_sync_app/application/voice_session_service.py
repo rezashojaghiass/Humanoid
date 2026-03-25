@@ -503,6 +503,7 @@ class VoiceSessionService:
                     continue
                 elif "elbow" in t_clean or "elb" in t_clean:
                     body_part = "elbow"
+                    joint = "ELBOW"  # Set joint directly for elbow
                     self._say("Do you want me to open or close?")
                     continue
                 else:
