@@ -122,8 +122,15 @@ class ArduinoSerialGestureAdapter(GesturePort):
             raise RuntimeError(f"Invalid arm side: {side}")
         if joint not in {"ELBOW", "SHOULDER1", "SHOULDER2"}:
             raise RuntimeError(f"Invalid arm joint: {joint}")
-        if direction not in {"UP", "DOWN"}:
-            raise RuntimeError(f"Invalid arm direction: {direction}")
+        # Validate direction based on joint type
+        if joint == "ELBOW":
+            # Elbow uses OPEN/CLOSE
+            if direction not in {"OPEN", "CLOSE"}:
+                raise RuntimeError(f"Invalid elbow direction: {direction} (expected OPEN or CLOSE)")
+        else:
+            # Shoulder uses UP/DOWN/LEFT/RIGHT
+            if direction not in {"UP", "DOWN", "LEFT", "RIGHT"}:
+                raise RuntimeError(f"Invalid shoulder direction: {direction} (expected UP/DOWN/LEFT/RIGHT)")
 
         amount = max(1, min(100, amount))
         line = f"ARM_CAL:{side}:{joint}:{direction}:{amount}"
