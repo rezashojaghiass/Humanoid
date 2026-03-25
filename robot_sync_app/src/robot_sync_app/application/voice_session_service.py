@@ -536,11 +536,11 @@ class VoiceSessionService:
                         self._say("Do you want me to move up or down?")
                         continue
                 elif body_part == "shoulder" and joint == "SHOULDER2":
-                    # Shoulder 2: left or right
+                    # Shoulder 2: left or right (mapped to UP/DOWN for Arduino)
                     if "left" in t_clean:
-                        direction = "LEFT"
+                        direction = "UP"  # LEFT mapped to UP
                     elif "right" in t_clean:
-                        direction = "RIGHT"
+                        direction = "DOWN"  # RIGHT mapped to DOWN
                     else:
                         self._say("Do you want me to move left or right?")
                         continue
