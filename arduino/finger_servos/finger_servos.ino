@@ -644,7 +644,7 @@ void setFingersCloseSequential() {
   setFingersOpen();
 }
 
-// Sequential finger closing with right elbow movement (Mexican wave style)
+// Sequential finger closing with right elbow and shoulder movement
 void setFingersCloseSequentialWithArms() {
   const unsigned long PHASE_DELAY = 120;
   const unsigned long HALF_MOVE = 800;
@@ -653,7 +653,11 @@ void setFingersCloseSequentialWithArms() {
   unsigned long totalDuration = (9 * PHASE_DELAY) + (2 * HALF_MOVE);
   unsigned long lastUpdate = 0;
   
-  // Attach right elbow if not attached
+  // Attach right shoulder and elbow if not attached
+  if (!sRSh1.attached()) {
+    powerOn(R_SH1_PWR);
+    sRSh1.attach(R_SH1_PIN);
+  }
   if (!sRElb.attached()) {
     powerOn(R_ELB_PWR);
     sRElb.attach(R_ELB_PIN);
@@ -684,6 +688,20 @@ void setFingersCloseSequentialWithArms() {
     sLRing.writeMicroseconds(   wavePos(LRING_OPEN,   LRING_CLOSE,   dt[8]) );
     sLPinky.writeMicroseconds(  wavePos(LPINKY_OPEN,  LPINKY_CLOSE,  dt[9]) );
     
+    // ========== RIGHT SHOULDER 1 ==========
+    // Start at neutral, smooth UP during first half, smooth DOWN during second half
+    if (elapsed < HALF_MOVE) {
+      // First half: smooth move from neutral to UP
+      float progress = (float)elapsed / (float)HALF_MOVE;
+      int sh1_pos = lerpInt(R_SH1_NEUTRAL_US, R_SH1_UP_US, progress);
+      sRSh1.writeMicroseconds(sh1_pos);
+    } else {
+      // Second half: smooth move from UP back to neutral
+      float progress = (float)(elapsed - HALF_MOVE) / (float)HALF_MOVE;
+      int sh1_pos = lerpInt(R_SH1_UP_US, R_SH1_NEUTRAL_US, progress);
+      sRSh1.writeMicroseconds(sh1_pos);
+    }
+    
     // ========== RIGHT ELBOW ==========
     // Open at start, close in middle, open at end (same as fingers)
     if (elapsed < HALF_MOVE) {
@@ -697,7 +715,19 @@ void setFingersCloseSequentialWithArms() {
   
   // Return to neutral positions
   setFingersOpen();
+  sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
   sRElb.writeMicroseconds(1200);  // RELB_OPEN
+  
+  // Detach and power off servos
+  delay(50);  // Let servos settle
+  if (sRSh1.attached()) {
+    sRSh1.detach();
+    powerOff(R_SH1_PWR);
+  }
+  if (sRElb.attached()) {
+    sRElb.detach();
+    powerOff(R_ELB_PWR);
+  }
 }
 
 void setRightFingersCloseSequential() {
