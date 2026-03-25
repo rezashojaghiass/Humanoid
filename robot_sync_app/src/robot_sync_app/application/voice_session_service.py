@@ -547,9 +547,9 @@ class VoiceSessionService:
                 elif body_part == "elbow":
                     # Elbow: open or close (mapped to UP/DOWN for Arduino)
                     if "open" in t_clean:
-                        direction = "UP"  # OPEN mapped to UP
+                        direction = "DOWN"  # OPEN mapped to DOWN
                     elif "close" in t_clean:
-                        direction = "DOWN"  # CLOSE mapped to DOWN
+                        direction = "UP"  # CLOSE mapped to UP
                     else:
                         self._say("Do you want me to open or close?")
                         continue
