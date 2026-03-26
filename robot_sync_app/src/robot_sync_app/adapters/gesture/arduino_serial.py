@@ -57,6 +57,23 @@ class ArduinoSerialGestureAdapter(GesturePort):
         except Exception:
             pass
 
+    def _wait_for_animation_complete(self, timeout: float = 6.0) -> None:
+        """Wait for Arduino to send ANIMATION:COMPLETE message after finger animation."""
+        if self._serial is None:
+            return
+        
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                line = self._serial.readline().decode("utf-8", errors="ignore").strip()
+                if line.startswith("ANIMATION:COMPLETE"):
+                    return  # Animation is done, proceed
+            except Exception:
+                pass
+        
+        # Timeout - just proceed anyway
+        print("[GESTURE] Warning: ANIMATION:COMPLETE not received within timeout")
+
     def _is_arm_command(self, name: str) -> bool:
         n = name.lower()
         return n.startswith(self.ARM_PREFIXES)
@@ -104,6 +121,10 @@ class ArduinoSerialGestureAdapter(GesturePort):
                 print(f"[GESTURE-MOCK] {line}")
                 return
             self._serial.write((line + "\n").encode("utf-8"))
+            
+            # For CLOSE_SEQ_ARMS, wait for animation to actually complete
+            if action == "CLOSE_SEQ_ARMS":
+                self._wait_for_animation_complete()
             return
 
         if name != "arm_calibration_step":

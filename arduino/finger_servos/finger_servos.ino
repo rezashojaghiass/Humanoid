@@ -646,34 +646,85 @@ void setFingersCloseSequential() {
 
 // Sequential finger closing with right elbow and shoulder movement
 void setFingersCloseSequentialWithArms() {
+  // Finger wave parameters (for looping)
   const unsigned long PHASE_DELAY = 120;
   const unsigned long HALF_MOVE = 800;
   const unsigned long UPDATE_MS = 20;
+  const unsigned long FINGER_CYCLE = (9 * PHASE_DELAY) + (2 * HALF_MOVE);  // ~2680ms per complete wave
+
+  // Shoulder/arm timing (Feb10 baseline - drives total animation duration)
+  const unsigned long R_ARM_UP_MS = 2000;        // 2 seconds UP
+  const unsigned long R_ARM_PAUSE_MS = 180;      // Pause at top
+  const unsigned long R_ARM_DOWN_MS = 1900;      // 1.9 seconds DOWN
+
+  // LEFT ARM (from Feb10)
+  const unsigned long L_ARM_UP_MS = 2000;        // 2 seconds UP
+  const unsigned long L_ARM_PAUSE_MS = 180;      // Pause at top
+  const unsigned long L_ARM_DOWN_MS = 1570;      // 1.57 seconds DOWN
+  
   unsigned long t0 = millis();
-  unsigned long totalDuration = (9 * PHASE_DELAY) + (2 * HALF_MOVE);
+  unsigned long R_UP_END = R_ARM_UP_MS;
+  unsigned long R_PAUSE_END = R_UP_END + R_ARM_PAUSE_MS;
+  unsigned long R_DOWN_END = R_PAUSE_END + R_ARM_DOWN_MS;
+  
+  unsigned long L_UP_END = L_ARM_UP_MS;
+  unsigned long L_PAUSE_END = L_UP_END + L_ARM_PAUSE_MS;
+  unsigned long L_DOWN_END = L_PAUSE_END + L_ARM_DOWN_MS;
+  
+  // Total time is the longer of the two arms, plus 200ms settle
+  unsigned long TOTAL_ANIMATION_TIME = ((R_DOWN_END > L_DOWN_END) ? R_DOWN_END : L_DOWN_END) + 200;
+  
   unsigned long lastUpdate = 0;
   
   // Attach right shoulder and elbow if not attached
   if (!sRSh1.attached()) {
     powerOn(R_SH1_PWR);
     sRSh1.attach(R_SH1_PIN);
+    Serial.println("[SERVO] Attached right shoulder 1");
   }
   if (!sRElb.attached()) {
     powerOn(R_ELB_PWR);
     sRElb.attach(R_ELB_PIN);
+    Serial.println("[SERVO] Attached right elbow");
   }
   
-  while (millis() - t0 < totalDuration) {
+  // Attach left shoulder if not attached
+  if (!sLSh1.attached()) {
+    powerOn(L_SH1_PWR);
+    sLSh1.attach(L_SH1_PIN);
+    Serial.println("[SERVO] Attached left shoulder 1");
+  }
+  
+  // Attach left elbow if not attached
+  if (!sLElb.attached()) {
+    powerOn(L_ELB_PWR);
+    sLElb.attach(L_ELB_PIN);
+    Serial.println("[SERVO] Attached left elbow");
+  }
+  
+  while (true) {
     unsigned long now = millis();
     unsigned long elapsed = now - t0;
+    
+    // Exit loop when total animation time (including settle) has elapsed
+    if (elapsed >= TOTAL_ANIMATION_TIME) {
+      Serial.print("[SERVO] Animation complete at elapsed=");
+      Serial.print(elapsed);
+      Serial.println("ms, exiting loop");
+      break;
+    }
     
     if (now - lastUpdate < UPDATE_MS) continue;
     lastUpdate = now;
     
-    // ========== FINGER WAVE ==========
+    // ========== FINGER WAVE (LOOPING) ==========
+    // Fingers loop continuously throughout shoulder movement
+    unsigned long elapsedInCycle = elapsed % FINGER_CYCLE;
     long dt[10];
     for (int i = 0; i < 10; i++) {
-      dt[i] = (long)(now - (t0 + (unsigned long)i * PHASE_DELAY));
+      long phaseOffset = (long)(i * PHASE_DELAY);
+      dt[i] = (long)elapsedInCycle - phaseOffset;
+      if (dt[i] < 0) dt[i] = 0;  // Finger hasn't started yet in this cycle
     }
     
     sThumb.writeMicroseconds(  wavePos(THUMB_OPEN,  THUMB_CLOSE,  dt[0]) );
@@ -688,46 +739,149 @@ void setFingersCloseSequentialWithArms() {
     sLRing.writeMicroseconds(   wavePos(LRING_OPEN,   LRING_CLOSE,   dt[8]) );
     sLPinky.writeMicroseconds(  wavePos(LPINKY_OPEN,  LPINKY_CLOSE,  dt[9]) );
     
-    // ========== RIGHT SHOULDER 1 ==========
-    // Start at neutral, smooth UP during first half, smooth DOWN during second half
-    if (elapsed < HALF_MOVE) {
-      // First half: smooth move from neutral to UP
-      float progress = (float)elapsed / (float)HALF_MOVE;
+    // ========== RIGHT SHOULDER 1 (Feb10 BASELINE) ==========
+    // Timeline: UP (2s) -> PAUSE (0.18s) -> DOWN (1.9s) + 200ms SETTLE
+    if (elapsed < R_UP_END) {
+      // Phase 1: smooth move from neutral to UP over 2 seconds
+      float progress = (float)elapsed / (float)R_ARM_UP_MS;
       int sh1_pos = lerpInt(R_SH1_NEUTRAL_US, R_SH1_UP_US, progress);
       sRSh1.writeMicroseconds(sh1_pos);
-    } else {
-      // Second half: smooth move from UP back to neutral
-      float progress = (float)(elapsed - HALF_MOVE) / (float)HALF_MOVE;
+      
+      // Log phase 1 start
+      if (elapsed < 50) {
+        Serial.println("[SERVO] Phase 1 START: Shoulder moving UP");
+      }
+    } else if (elapsed < R_PAUSE_END) {
+      // Phase 2: PAUSE at UP position
+      sRSh1.writeMicroseconds(R_SH1_UP_US);
+      
+      // Log phase 2 start
+      if (elapsed < (R_UP_END + 50)) {
+        Serial.println("[SERVO] Phase 2 START: Shoulder at UP (PAUSE)");
+      }
+    } else if (elapsed < R_DOWN_END) {
+      // Phase 3: smooth move from UP back to neutral over 1.9 seconds
+      float progress = (float)(elapsed - R_PAUSE_END) / (float)R_ARM_DOWN_MS;
+      
+      // Log phase 3 start
+      if (elapsed < (R_PAUSE_END + 50)) {
+        Serial.println("[SERVO] Phase 3 START: Shoulder moving DOWN");
+      }
+      
+      // Clamp progress to [0, 1]
+      if (progress > 1.0) progress = 1.0;
+      
       int sh1_pos = lerpInt(R_SH1_UP_US, R_SH1_NEUTRAL_US, progress);
       sRSh1.writeMicroseconds(sh1_pos);
+      
+      // Log when DOWN phase completes
+      if (progress >= 0.99) {
+        Serial.print("[SERVO] Phase 3 COMPLETE at elapsed=");
+        Serial.print(elapsed);
+        Serial.println("ms");
+      }
+    } else {
+      // Phase 4: Already at neutral (settled), keep there during final 200ms
+      sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
     }
     
-    // ========== RIGHT ELBOW ==========
-    // Open at start, close in middle, open at end (same as fingers)
-    if (elapsed < HALF_MOVE) {
-      // First half: closing phase - elbow closes
+    // ========== RIGHT ELBOW (synchronized with finger cycles) ==========
+    // Elbow loops with fingers: close during finger close phase, open during open phase
+    unsigned long elb_elapsed_in_cycle = elapsed % FINGER_CYCLE;
+    if (elb_elapsed_in_cycle < HALF_MOVE) {
+      // Finger close phase - elbow closes
       sRElb.writeMicroseconds(1800);  // RELB_CLOSE
     } else {
-      // Second half: opening phase - elbow opens
+      // Finger open phase - elbow opens
       sRElb.writeMicroseconds(1200);  // RELB_OPEN
     }
+    
+    // ========== LEFT ELBOW (synchronized with finger cycles) ==========
+    // Elbow loops with fingers: close during finger close phase, open during open phase
+    if (elb_elapsed_in_cycle < HALF_MOVE) {
+      // Finger close phase - elbow closes
+      sLElb.writeMicroseconds(1500);  // LELB_CLOSE
+    } else {
+      // Finger open phase - elbow opens
+      sLElb.writeMicroseconds(880);   // LELB_OPEN
+    }
+    
+    // ========== LEFT SHOULDER 1 (Feb10 BASELINE - mirrors right timing) ==========
+    // Timeline: UP (2s) -> PAUSE (0.18s) -> DOWN (1.57s) + settle
+    if (elapsed < L_UP_END) {
+      // Phase 1: smooth move from neutral to UP
+      float progress = (float)elapsed / (float)L_ARM_UP_MS;
+      int sh1_pos = lerpInt(L_SH1_NEUTRAL_US, L_SH1_UP_US, progress);
+      sLSh1.writeMicroseconds(sh1_pos);
+      
+      if (elapsed < 50) {
+        Serial.println("[SERVO] L_Phase 1 START: Shoulder moving UP");
+      }
+    } else if (elapsed < L_PAUSE_END) {
+      // Phase 2: PAUSE at UP position
+      sLSh1.writeMicroseconds(L_SH1_UP_US);
+      
+      if (elapsed < (L_UP_END + 50)) {
+        Serial.println("[SERVO] L_Phase 2 START: Shoulder at UP (PAUSE)");
+      }
+    } else if (elapsed < L_DOWN_END) {
+      // Phase 3: smooth move from UP back to neutral
+      float progress = (float)(elapsed - L_PAUSE_END) / (float)L_ARM_DOWN_MS;
+      
+      if (elapsed < (L_PAUSE_END + 50)) {
+        Serial.println("[SERVO] L_Phase 3 START: Shoulder moving DOWN");
+      }
+      
+      if (progress > 1.0) progress = 1.0;
+      
+      int sh1_pos = lerpInt(L_SH1_UP_US, L_SH1_NEUTRAL_US, progress);
+      sLSh1.writeMicroseconds(sh1_pos);
+      
+      if (progress >= 0.99) {
+        Serial.print("[SERVO] L_Phase 3 COMPLETE at elapsed=");
+        Serial.print(elapsed);
+        Serial.println("ms");
+      }
+    } else {
+      // Phase 4: Already at neutral (settled), keep there
+      sLSh1.writeMicroseconds(L_SH1_NEUTRAL_US);
+    }
   }
+  
+  Serial.println("[SERVO] Loop exited - animation complete");
   
   // Return to neutral positions
   setFingersOpen();
   sRSh1.writeMicroseconds(R_SH1_NEUTRAL_US);
   sRElb.writeMicroseconds(1200);  // RELB_OPEN
+  sLSh1.writeMicroseconds(L_SH1_NEUTRAL_US);
+  sLElb.writeMicroseconds(880);   // LELB_OPEN
+  Serial.println("[SERVO] All servos returned to neutral");
   
   // Detach and power off servos
   delay(50);  // Let servos settle
   if (sRSh1.attached()) {
     sRSh1.detach();
     powerOff(R_SH1_PWR);
+    Serial.println("[SERVO] Right shoulder 1 detached and powered off");
   }
   if (sRElb.attached()) {
     sRElb.detach();
     powerOff(R_ELB_PWR);
+    Serial.println("[SERVO] Right elbow detached and powered off");
   }
+  if (sLSh1.attached()) {
+    sLSh1.detach();
+    powerOff(L_SH1_PWR);
+    Serial.println("[SERVO] Left shoulder 1 detached and powered off");
+  }
+  if (sLElb.attached()) {
+    sLElb.detach();
+    powerOff(L_ELB_PWR);
+    Serial.println("[SERVO] Left elbow detached and powered off");
+  }
+  
+  Serial.println("[SERVO] setFingersCloseSequentialWithArms() complete");
 }
 
 void setRightFingersCloseSequential() {
@@ -833,8 +987,13 @@ void processFingerCmd(const String &line) {
 
   if (action == "CLOSE_SEQ_ARMS") {
     // Mexican wave with arm movement (only for BOTH hands)
+    Serial.println("[CMD] Received CLOSE_SEQ_ARMS command");
+    Serial.println("ACK:FINGER:CLOSE_SEQ_ARMS");  // Animation starting
+    
     if (doRight && doLeft) {
       setFingersCloseSequentialWithArms();
+      Serial.println("[CMD] Animation function returned");
+      Serial.println("ANIMATION:COMPLETE");  // Animation truly finished - shoulder at neutral
     } else {
       // Fall back to sequential fingers if not both hands
       if (doRight) {
@@ -842,8 +1001,8 @@ void processFingerCmd(const String &line) {
       } else if (doLeft) {
         setLeftFingersCloseSequential();
       }
+      Serial.println("ANIMATION:COMPLETE");
     }
-    Serial.println("ACK:FINGER:CLOSE_SEQ_ARMS");
     return;
   }
 
