@@ -47,14 +47,30 @@ sudo service apport stop 2>/dev/null || true
 # Ensure xscreensaver is running before app starts
 # The app will disable it during execution and re-enable it on exit
 if command -v xscreensaver &> /dev/null; then
-    # Kill any existing instances for clean restart
+    # Kill any existing instances
+    echo -e "${BLUE}Cleaning up any existing xscreensaver processes...${NC}"
     pkill -9 xscreensaver 2>/dev/null || true
-    sleep 0.5
+    killall -9 xscreensaver 2>/dev/null || true
+    sleep 1
     
-    # Start xscreensaver in background on DISPLAY=:0
-    /usr/bin/xscreensaver -no-splash > /tmp/xscreensaver.log 2>&1 &
-    SCREENSAVER_PID=$!
-    echo -e "${GREEN}✓ Screensaver started (PID: $SCREENSAVER_PID)${NC}"
+    # Check if config file has bad options and backup it if needed
+    if [ -f ~/.xscreensaver ] && grep -q "overlayTextFont\|hardwareVideoSync" ~/.xscreensaver 2>/dev/null; then
+        echo -e "${BLUE}⚠️  Found incompatible options in ~/.xscreensaver, backing up...${NC}"
+        mv ~/.xscreensaver ~/.xscreensaver.bak.$(date +%s)
+    fi
+    
+    # Start xscreensaver on physical display :0 (exact working command)
+    echo -e "${BLUE}Starting screensaver on DISPLAY=:0...${NC}"
+    DISPLAY=:0 /usr/bin/xscreensaver -no-splash > /tmp/xscreensaver.log 2>&1 &
+    sleep 1
+    
+    # Verify it's running
+    if DISPLAY=:0 xscreensaver-command -time >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Screensaver started successfully on physical display${NC}"
+    else
+        echo -e "${RED}✗ Screensaver failed to start${NC}"
+        cat /tmp/xscreensaver.log
+    fi
 else
     echo -e "${BLUE}⚠️  xscreensaver not found (optional)${NC}"
 fi
