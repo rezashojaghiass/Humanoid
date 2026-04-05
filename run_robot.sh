@@ -2,7 +2,7 @@
 # Run Humanoid Robot with Lip-Sync Animation & Facial Expression Mode
 # Features: Baseline lip-sync (frames 1,4,9), emotion animations, elbow joint fix, funny mode
 
-set -e  # Exit on any error
+# Note: set -e is NOT used here because screensaver startup should not block app launch
 
 # Environment setup
 export GTK_DEBUG=""
@@ -46,9 +46,10 @@ sudo service apport stop 2>/dev/null || true
 # Start Screensaver (for Jetson Xavier display)
 # ============================================================================
 # Use the standalone screensaver startup script
+# Use || true to prevent screensaver errors from blocking app launch
 if [ -f "$SCREENSAVER_SCRIPT" ]; then
     echo -e "${BLUE}Starting screensaver daemon...${NC}"
-    bash "$SCREENSAVER_SCRIPT"
+    bash "$SCREENSAVER_SCRIPT" || true
 else
     echo -e "${YELLOW}⚠️  Screensaver script not found: $SCREENSAVER_SCRIPT${NC}"
 fi
