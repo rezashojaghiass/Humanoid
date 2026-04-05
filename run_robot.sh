@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run Humanoid Robot with Lip-Sync Animation & Facial Expression Mode
 # Features: Baseline lip-sync (frames 1,4,9), emotion animations, elbow joint fix, funny mode
+
 set -e  # Exit on any error
 
 # Environment setup
@@ -39,6 +40,24 @@ echo -e "${GREEN}✓ Config file: $CONFIG_FILE${NC}"
 # Disable Ubuntu apport (crash reporting)
 echo -e "${BLUE}Disabling crash reporting...${NC}"
 sudo service apport stop 2>/dev/null || true
+
+# ============================================================================
+# Start Screensaver (for Jetson Xavier display)
+# ============================================================================
+# Ensure xscreensaver is running before app starts
+# The app will disable it during execution and re-enable it on exit
+if command -v xscreensaver &> /dev/null; then
+    # Kill any existing instances for clean restart
+    pkill -9 xscreensaver 2>/dev/null || true
+    sleep 0.5
+    
+    # Start xscreensaver in background on DISPLAY=:0
+    /usr/bin/xscreensaver -no-splash > /tmp/xscreensaver.log 2>&1 &
+    SCREENSAVER_PID=$!
+    echo -e "${GREEN}✓ Screensaver started (PID: $SCREENSAVER_PID)${NC}"
+else
+    echo -e "${BLUE}⚠️  xscreensaver not found (optional)${NC}"
+fi
 
 # Log startup info
 echo -e "${BLUE}Starting robot with:${NC}"
