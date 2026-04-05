@@ -23,6 +23,7 @@ echo -e "${BLUE}═════════════════════�
 ROBOT_DIR="/home/reza/Humanoid"
 CONFIG_FILE="${ROBOT_DIR}/robot_sync_app/config/config_lipsync.yaml"
 PYTHON_PATH="${ROBOT_DIR}/robot_sync_app/src"
+SCREENSAVER_SCRIPT="${ROBOT_DIR}/start_screensaver.sh"
 
 if [ ! -d "$ROBOT_DIR" ]; then
     echo -e "${RED}✗ Robot directory not found: $ROBOT_DIR${NC}"
@@ -44,35 +45,12 @@ sudo service apport stop 2>/dev/null || true
 # ============================================================================
 # Start Screensaver (for Jetson Xavier display)
 # ============================================================================
-# Ensure xscreensaver is running before app starts
-# The app will disable it during execution and re-enable it on exit
-if command -v xscreensaver &> /dev/null; then
-    # Kill any existing instances
-    echo -e "${BLUE}Cleaning up any existing xscreensaver processes...${NC}"
-    pkill -9 xscreensaver 2>/dev/null || true
-    killall -9 xscreensaver 2>/dev/null || true
-    sleep 1
-    
-    # Check if config file has bad options and backup it if needed
-    if [ -f ~/.xscreensaver ] && grep -q "overlayTextFont\|hardwareVideoSync" ~/.xscreensaver 2>/dev/null; then
-        echo -e "${BLUE}⚠️  Found incompatible options in ~/.xscreensaver, backing up...${NC}"
-        mv ~/.xscreensaver ~/.xscreensaver.bak.$(date +%s)
-    fi
-    
-    # Start xscreensaver on physical display :0 (exact working command)
-    echo -e "${BLUE}Starting screensaver on DISPLAY=:0...${NC}"
-    DISPLAY=:0 /usr/bin/xscreensaver -no-splash > /tmp/xscreensaver.log 2>&1 &
-    sleep 1
-    
-    # Verify it's running
-    if DISPLAY=:0 xscreensaver-command -time >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Screensaver started successfully on physical display${NC}"
-    else
-        echo -e "${RED}✗ Screensaver failed to start${NC}"
-        cat /tmp/xscreensaver.log
-    fi
+# Use the standalone screensaver startup script
+if [ -f "$SCREENSAVER_SCRIPT" ]; then
+    echo -e "${BLUE}Starting screensaver daemon...${NC}"
+    bash "$SCREENSAVER_SCRIPT"
 else
-    echo -e "${BLUE}⚠️  xscreensaver not found (optional)${NC}"
+    echo -e "${YELLOW}⚠️  Screensaver script not found: $SCREENSAVER_SCRIPT${NC}"
 fi
 
 # Log startup info
