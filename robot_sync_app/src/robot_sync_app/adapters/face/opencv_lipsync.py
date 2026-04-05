@@ -3,6 +3,7 @@ import glob
 import time
 import threading
 import re
+import subprocess
 from pathlib import Path
 import cv2
 import numpy as np
@@ -13,10 +14,12 @@ class OpenCVLipSyncFaceAdapter(FacePort):
     """
     Lip-sync animated face using vowel detection from speech text.
     Maps vowel sounds to mouth shapes for realistic lip-syncing.
+    Supports screen sleep mode: display sleeps by default and wakes when code runs.
     """
 
     def __init__(self, width: int = 1280, height: int = 800,
-                 assets_path: str = "/home/reza/cropped_animation_frames_lipsync_3frames"):
+                 assets_path: str = "/home/reza/cropped_animation_frames_lipsync_3frames",
+                 enable_sleep_mode: bool = True):
         """
         Initialize lip-sync face display.
         
@@ -24,12 +27,15 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             width: Display width in pixels
             height: Display height in pixels
             assets_path: Path to lip-sync animation frames
+            enable_sleep_mode: If True, screen sleeps by default and wakes when robot runs
         """
         try:
             os.environ['DISPLAY'] = ':0'
             self.width = width
             self.height = height
             self.assets_path = assets_path
+            self.enable_sleep_mode = enable_sleep_mode
+            self.screen_awake = False
             
             # Load all frames
             self.expressions = self._load_animations()
@@ -69,6 +75,11 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             time.sleep(0.2)
             self._hide_cursor()
             
+            # Disable screensaver while robot is running (will be re-enabled on exit)
+            if self.enable_sleep_mode:
+                self._disable_screen_sleep()
+                print("[FACE] Screensaver disabled (app is running)")
+            
             # Display initial neutral frame
             if self.neutral_frame is not None:
                 cv2.imshow('Robot Face', self.neutral_frame)
@@ -83,6 +94,7 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             self._animation_thread.start()
             
             print(f"[FACE] OpenCV Lip-Sync Display initialized: {width}x{height}")
+            print(f"[FACE] Sleep mode: {'ENABLED' if enable_sleep_mode else 'DISABLED'}")
             print(f"[FACE] Loaded expressions: {list(self.expressions.keys())}")
             
         except Exception as e:
@@ -123,6 +135,40 @@ class OpenCVLipSyncFaceAdapter(FacePort):
                          stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=1)
         except Exception:
             pass
+    
+    def _enable_screen_sleep(self) -> None:
+        """Re-enable xscreensaver when robot app exits."""
+        display = os.environ.get('DISPLAY', ':0')
+        try:
+            # Start xscreensaver daemon to show demos when app is not running
+            subprocess.run(f"DISPLAY={display} xscreensaver -no-splash &", shell=True,
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
+            print("[FACE] Screensaver re-enabled (will show demos when app exits)")
+        except Exception as e:
+            print(f"[FACE] Warning: Could not enable screensaver: {e}")
+    
+    def _disable_screen_sleep(self) -> None:
+        """Disable screensaver while robot app is running."""
+        display = os.environ.get('DISPLAY', ':0')
+        try:
+            # Exit any running screensaver
+            subprocess.run(f"DISPLAY={display} xscreensaver-command -exit", shell=True,
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
+            print("[FACE] Screensaver disabled (app is running)")
+        except Exception as e:
+            print(f"[FACE] Warning: Could not disable screensaver: {e}")
+    
+    def _wake_screen(self) -> None:
+        """Make sure screen is active for robot display."""
+        display = os.environ.get('DISPLAY', ':0')
+        try:
+            # Exit screensaver if running
+            subprocess.run(f"DISPLAY={display} xscreensaver-command -exit", shell=True,
+                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
+            print("[FACE] Screen is active for robot display")
+            self.screen_awake = True
+        except Exception as e:
+            self.screen_awake = True
     
     def _create_invisible_cursor_image(self) -> None:
         """Create an invisible cursor image."""
@@ -264,11 +310,16 @@ class OpenCVLipSyncFaceAdapter(FacePort):
     def speak(self, text: str, duration: float = 0.0) -> None:
         """
         Start lip-sync animation based on speech text.
+        Wakes screen from sleep if in sleep mode.
         
         Args:
             text: The text being spoken
             duration: Duration of speech in seconds
         """
+        # Wake screen if in sleep mode
+        if self.enable_sleep_mode and not self.screen_awake:
+            self._wake_screen()
+        
         with self._animation_lock:
             self._speech_text = text
             self._speaking = True
@@ -338,10 +389,15 @@ class OpenCVLipSyncFaceAdapter(FacePort):
             self.speak_done()
 
     def cleanup(self) -> None:
-        """Cleanup display resources."""
+        """Cleanup display resources and re-enable screensaver."""
         self.running = False
         if self._animation_thread:
             self._animation_thread.join(timeout=2)
+        
+        # Re-enable screensaver when app exits
+        if self.enable_sleep_mode:
+            self._enable_screen_sleep()
+        
         try:
             cv2.destroyAllWindows()
             print("[FACE] Lip-sync display cleaned up")
