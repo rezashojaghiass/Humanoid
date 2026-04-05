@@ -140,9 +140,19 @@ class OpenCVLipSyncFaceAdapter(FacePort):
         """Re-enable xscreensaver when robot app exits."""
         display = os.environ.get('DISPLAY', ':0')
         try:
+            # First kill any existing xscreensaver process to ensure clean start
+            os.system("pkill -9 xscreensaver 2>/dev/null")
+            time.sleep(0.5)
+            
             # Start xscreensaver daemon to show demos when app is not running
-            subprocess.run(f"DISPLAY={display} xscreensaver -no-splash &", shell=True,
-                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
+            # Use Popen with start_new_session to properly detach the process
+            env = os.environ.copy()
+            env['DISPLAY'] = display
+            subprocess.Popen(['/usr/bin/xscreensaver', '-no-splash'],
+                           env=env,
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL,
+                           start_new_session=True)
             print("[FACE] Screensaver re-enabled (will show demos when app exits)")
         except Exception as e:
             print(f"[FACE] Warning: Could not enable screensaver: {e}")
@@ -390,12 +400,14 @@ class OpenCVLipSyncFaceAdapter(FacePort):
 
     def cleanup(self) -> None:
         """Cleanup display resources and re-enable screensaver."""
+        print("[FACE] Cleanup called - stopping animation thread...")
         self.running = False
         if self._animation_thread:
             self._animation_thread.join(timeout=2)
         
         # Re-enable screensaver when app exits
         if self.enable_sleep_mode:
+            print("[FACE] Re-enabling screensaver on app exit...")
             self._enable_screen_sleep()
         
         try:
