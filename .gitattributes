@@ -1,0 +1,16 @@
+# Git Language Detection for GitHub
+# This file helps GitHub's language detection recognize all languages in the project
+
+# Python
+*.py linguist-language=Python
+
+# Arduino / C++
+*.ino linguist-language=C++
+*.cpp linguist-language=C++
+*.h linguist-language=C++
+
+# Other files
+*.yaml linguist-detectable=false
+*.yml linguist-detectable=false
+*.md linguist-detectable=false
+*.txt linguist-detectable=false
