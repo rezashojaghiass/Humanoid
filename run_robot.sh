@@ -1,6 +1,5 @@
 #!/bin/bash
 # Run Humanoid Robot with Lip-Sync Animation & Facial Expression Mode
-
 export GTK_DEBUG=""
 export G_MESSAGES_DEBUG="fatal-criticals"
 export DISPLAY=:0
@@ -19,8 +18,6 @@ echo -e "${BLUE}═════════════════════�
 ROBOT_DIR="/home/reza/Humanoid"
 CONFIG_FILE="${ROBOT_DIR}/robot_sync_app/config/config_lipsync.yaml"
 PYTHON_PATH="${ROBOT_DIR}/robot_sync_app/src"
-DISPLAY_ON_SCRIPT="${ROBOT_DIR}/turn_display_on.sh"
-DISPLAY_OFF_SCRIPT="${ROBOT_DIR}/turn_display_off.sh"
 
 if [ ! -d "$ROBOT_DIR" ]; then
     echo -e "${RED}✗ Robot directory not found: $ROBOT_DIR${NC}"
@@ -42,10 +39,11 @@ sudo service apport stop 2>/dev/null || true
 # ============================================================================
 # TURN ON DISPLAY FOR APP
 # ============================================================================
-if [ -f "$DISPLAY_ON_SCRIPT" ]; then
-    echo -e "${BLUE}Turning on display for app...${NC}"
-    "$DISPLAY_ON_SCRIPT"
-fi
+echo -e "${BLUE}Turning on LCD display...${NC}"
+xset s off
+xset s noblank
+xset s reset
+echo -e "${GREEN}✓ LCD display turned ON${NC}"
 
 # Log startup info
 echo -e "${BLUE}Starting robot with:${NC}"
@@ -70,11 +68,10 @@ PYTHONPATH="$PYTHON_PATH" python3 -m robot_sync_app.main \
 echo -e "${BLUE}Robot session ended${NC}"
 
 # ============================================================================
-# TURN OFF DISPLAY AFTER APP EXITS
+# TURN OFF DISPLAY AFTER APP EXITS (Power Save Mode)
 # ============================================================================
-# Display is now off to save power
-if [ -f "$DISPLAY_OFF_SCRIPT" ]; then
-    echo -e "${BLUE}Turning off display (power save mode)...${NC}"
-    "$DISPLAY_OFF_SCRIPT"
-fi
-
+echo -e "${BLUE}Turning off LCD display (blank screen for power save)...${NC}"
+xset s blank
+xset s 5 5
+xset s activate
+echo -e "${GREEN}✓ LCD display turned OFF (screen blanked)${NC}"
