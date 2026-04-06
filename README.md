@@ -29,7 +29,7 @@ This project unifies five specialized robot subsystems into a single voice-enabl
 |-----------|-----------|---------|--------|
 | **Voice AI** | [ChatBotRobot](https://github.com/rezashojaghiass/ChatBotRobot) | ASR/TTS speech, Bedrock LLM, RAG | ✅ Integrated |
 | **Arm Control** | [RobotArmServos](https://github.com/rezashojaghiass/RobotArmServos) | Hand gestures, arm movements, servo control | ✅ Integrated |
-| **LCD Face** | [FacialAnimation](https://github.com/rezashojaghiass/FacialAnimation) | Buzz Lightyear facial expressions, lip-sync | 🔄 In Progress |
+| **LCD Face** | [FacialAnimation](https://github.com/rezashojaghiass/FacialAnimation) | Buzz Lightyear facial expressions, lip-sync, display control | ✅ Integrated |
 | **Remote Access** | [VNC_Setup](https://github.com/rezashojaghiass/VNC_Setup) | Headless VNC for Xavier display | ✅ Configured |
 | **LiDAR Autonomy** | [LidarUnitree](https://github.com/rezashojaghiass/LidarUnitree) | ROS2 point cloud, navigation | 🔄 Scaffolded |
 
