@@ -23,7 +23,20 @@ python3 -c "import pyaudio as p; a=p.PyAudio(); [print(f'{i}: {a.get_device_info
 Then update:
 - `robot_sync_app/config/config.yaml` → `speech.output_device_index`
 
-## 3) Run orchestrator
+## 3) Run orchestrator with display control (RECOMMENDED)
+
+**Easiest method - automatic display management:**
+
+```bash
+bash run_robot.sh
+```
+
+This script automatically:
+- ✅ Turns **ON** the LCD display
+- ✅ Runs the robot app
+- ✅ Turns **OFF** the LCD display when you exit (power saving mode)
+
+**Manual run (if you need custom config):**
 
 ```bash
 PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
@@ -33,6 +46,21 @@ PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
 ```
 
 ## 4) Auto-start Riva + continuous conversation mode
+
+```bash
+bash run_robot.sh
+```
+
+Now:
+- **Press spacebar** to start listening (green indicator)
+- **Speak your message** (robot should echo it back)
+- **Release spacebar** to process
+- **Wait 2-3 seconds** for AWS Bedrock LLM response
+- **Hear robot speak** and see finger gestures sync
+
+To exit: Press `Ctrl+C` or say "quit"
+
+Or manually:
 
 ```bash
 PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
@@ -52,8 +80,43 @@ Keep this value:
 
 This ensures fingers-only operation.
 
+## 6) Display Control (New Feature)
 
-## 6) Arm calibration mode
+### What happens automatically with `bash run_robot.sh`:
+- **Display ON** → App starts → Display OFF (blank screen when idle)
+- **Timeout:** 5 seconds of inactivity before LCD blanks
+- **Purpose:** Power saving mode - LCD consumes significant power
+
+### Test display control manually:
+
+```bash
+bash test_display.sh
+```
+
+This will:
+1. Turn display OFF (blank screen)
+2. Wait 3 seconds
+3. Turn display ON
+
+### Manual display control:
+
+```bash
+# Turn display ON
+export DISPLAY=:0
+xset s off
+xset s noblank
+xset s reset
+
+# Turn display OFF (blank after 5 seconds)
+export DISPLAY=:0
+xset s blank
+xset s 5 5
+xset s activate
+```
+
+See [run_robot.sh](run_robot.sh) for implementation details.
+
+## 7) Arm calibration mode
 
 Use the repo launcher:
 
@@ -66,7 +129,7 @@ This uses `robot_sync_app/config/config.calibration.yaml` (with fallback to `con
 Riva note:
 - Use the v2.19 quickstart folder, configured for 2.14.0 images/models.
 
-## 7) Calibration behavior contract (important)
+## 8) Calibration behavior contract (important)
 
 When running calibration, the expected behavior is:
 
@@ -82,3 +145,13 @@ When running calibration, the expected behavior is:
 - Arduino calibration move is one-shot and time-limited to 0.5s per step.
 
 Do not re-enable finger animation in calibration mode.
+
+## 📚 Documentation Index
+
+For complete guides, see **[README.md](README.md)** which has:
+- Full documentation table of contents
+- Quick navigation by task
+- System architecture diagrams
+- Hardware setup details
+
+Or visit [INDEX.md](INDEX.md) for complete file navigation.

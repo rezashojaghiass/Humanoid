@@ -275,3 +275,73 @@ PYTHONPATH=robot_sync_app/src python3 -m robot_sync_app.main \
 - Add ASR + LLM conversation loop integration
 - Add richer timeline scheduling (word-level gesture timing)
 - Add cloud data migration with S3 backend
+
+---
+
+## 📚 Documentation Files Guide
+
+**All markdown files in this project with their purposes:**
+
+| File | Purpose | Read When | Time |
+|------|---------|-----------|------|
+| **[README.md](README.md)** | 📖 **START HERE** - Project overview, architecture, quick start | First time using the robot | 5 min |
+| **[QUICKSTART.md](QUICKSTART.md)** | ⚡ Daily use checklist - Riva, audio, run app | Every session (after cold boot) | 2 min |
+| **[STARTUP.md](STARTUP.md)** | 🚀 Complete cold boot guide - Docker, Riva, hardware, Python | Xavier restarted or first setup | 30 min |
+| **[XAVIER_PATHS.md](XAVIER_PATHS.md)** | 🗺️ Exact file locations on Jetson - models, config, scripts | Before any install/download | 5 min |
+| **[INDEX.md](INDEX.md)** | 📑 Navigation guide & file directory | Need to find a specific file | 3 min |
+| **[INTEGRATION_SUMMARY.md](INTEGRATION_SUMMARY.md)** | ✅ Session summary - what was done, status, next steps | End of session or session handoff | 10 min |
+| **[docs/INTEGRATION.md](docs/INTEGRATION.md)** | 🔗 Cross-repository integration details (5 external repos) | Understanding overall system architecture | 15 min |
+| **[docs/SERVO_LOGIC.md](docs/SERVO_LOGIC.md)** | 🎮 Servo control logic - movement patterns, calibration | Debugging servo behavior or calibration | 10 min |
+| **[docs/SERVO_QUICK_REFERENCE.md](docs/SERVO_QUICK_REFERENCE.md)** | 📋 Quick servo command reference | Testing individual servo movements | 3 min |
+| **[CONSOLIDATION_COMPLETE.md](CONSOLIDATION_COMPLETE.md)** | 📦 Integration completion summary | Understanding what was consolidated | 10 min |
+| **[MULTIPROCESSING_FIX.md](MULTIPROCESSING_FIX.md)** | 🔧 Multiprocessing bug fix details | Troubleshooting voice/gesture sync issues | 5 min |
+| **[COLDBOOT.md](COLDBOOT.md)** | ❄️ Cold boot procedures & recovery | System recovery after unexpected shutdown | 10 min |
+| **[UPDATES_FROM_CHATBOT.md](UPDATES_FROM_CHATBOT.md)** | 🔄 Updates synchronized from ChatBotRobot repo | Tracking cross-repo changes | 5 min |
+| **[robot_sync_app/README.md](robot_sync_app/README.md)** | 🤖 App-specific documentation | Understanding app internals | 15 min |
+
+---
+
+## 🎮 Quick Navigation by Task
+
+### "I want to run the robot"
+1. Read: [QUICKSTART.md](QUICKSTART.md) (2 min)
+2. Run: `bash run_robot.sh`
+3. Done!
+
+### "I just got a Jetson Xavier with no Docker"
+1. Read: [STARTUP.md](STARTUP.md) (30 min complete guide)
+2. Follow every step
+3. At the end: Your robot is ready!
+
+### "I need to find where Riva lives on Xavier"
+- Read: [XAVIER_PATHS.md](XAVIER_PATHS.md)
+- Shows exact paths for: Riva, models, config, credentials, scripts
+
+### "My servo doesn't move - need to debug"
+1. Read: [docs/SERVO_QUICK_REFERENCE.md](docs/SERVO_QUICK_REFERENCE.md) (quick test commands)
+2. If still stuck: [docs/SERVO_LOGIC.md](docs/SERVO_LOGIC.md) (detailed logic)
+
+### "I want to understand the full system"
+1. [README.md](README.md) - High-level overview
+2. [docs/INTEGRATION.md](docs/INTEGRATION.md) - How 5 repos fit together
+3. [STARTUP.md](STARTUP.md) - What actually runs
+
+---
+
+## 💡 Display Control (New)
+
+The robot now automatically manages the LCD display:
+
+**What happens:**
+- ✅ Display turns **ON** when you run `bash run_robot.sh`
+- ✅ App runs with display active
+- ✅ Display turns **OFF** (blank screen) when app exits → **Power saving mode**
+
+**Timeout:** 5 seconds of inactivity before LCD blanks
+
+**Manual control available:**
+- Turn display ON: `bash test_display.sh` (test script)
+- See [run_robot.sh](run_robot.sh) lines 43-56 (display ON) and 75-83 (display OFF)
+
+---
+
