@@ -113,7 +113,13 @@ Finger commands:
 ## 🏗️ System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────┐
+│                DISPLAY MANAGEMENT (NEW)                      │
+│  xset screen blanking: ON when app runs, OFF when idle      │
+│  Timeout: 5s → LCD blanks (power saving mode)               │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ (Display enabled)
+┌──────────────────────────▼──────────────────────────────────┐
 │                    VOICE INPUT LAYER                         │
 │  Microphone (Wireless GO II @ 48kHz) ──► VAD Detection     │
 └──────────────────────────┬──────────────────────────────────┘
@@ -148,15 +154,14 @@ Finger commands:
         │  (Scaffolded - future integration)  │
         └───────────────────────────────────┘
 ```
-- `storage.local_base_path: /mnt/nvme/adrian/robot_data`
 
-Future AWS switch:
-1. set `storage.backend: s3`
-2. set `storage.s3_bucket`
-3. set `storage.s3_prefix`
+**Display Control Details:**
+- **Mechanism:** `xset s blank` and `xset s noblank` commands (X11 screen blanking)
+- **Why not DPMS?** DPMS not available on Jetson Xavier
+- **Script:** [run_robot.sh](run_robot.sh) lines 43-56 (display ON) and 75-83 (display OFF)
+- **Test:** Run `bash test_display.sh` to verify display control works
 
-No orchestration code changes required.
-
+---
 ---
 
 ## 4) Prerequisites
