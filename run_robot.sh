@@ -1,10 +1,6 @@
 #!/bin/bash
 # Run Humanoid Robot with Lip-Sync Animation & Facial Expression Mode
-# Features: Baseline lip-sync (frames 1,4,9), emotion animations, elbow joint fix, funny mode
 
-# Note: set -e is NOT used here because screensaver startup should not block app launch
-
-# Environment setup
 export GTK_DEBUG=""
 export G_MESSAGES_DEBUG="fatal-criticals"
 export DISPLAY=:0
@@ -13,7 +9,7 @@ export DISPLAY=:0
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Humanoid Robot - Voice Chat with Animation${NC}"
@@ -42,18 +38,6 @@ echo -e "${GREEN}✓ Config file: $CONFIG_FILE${NC}"
 echo -e "${BLUE}Disabling crash reporting...${NC}"
 sudo service apport stop 2>/dev/null || true
 
-# ============================================================================
-# Start Screensaver (for Jetson Xavier display)
-# ============================================================================
-# Use the standalone screensaver startup script
-# Use || true to prevent screensaver errors from blocking app launch
-if [ -f "$SCREENSAVER_SCRIPT" ]; then
-    echo -e "${BLUE}Starting screensaver daemon...${NC}"
-    bash "$SCREENSAVER_SCRIPT" || true
-else
-    echo -e "${YELLOW}⚠️  Screensaver script not found: $SCREENSAVER_SCRIPT${NC}"
-fi
-
 # Log startup info
 echo -e "${BLUE}Starting robot with:${NC}"
 echo "  - Baseline lip-sync (frames 1, 4, 9)"
@@ -64,11 +48,26 @@ echo "  - Enhanced cursor hiding"
 echo "  - Pre-loaded expression animations (zero latency)"
 echo ""
 
-# Run the app
+# ============================================================================
+# RUN THE MAIN APP - This blocks until app exits
+# ============================================================================
 cd "$ROBOT_DIR"
 PYTHONPATH="$PYTHON_PATH" python3 -m robot_sync_app.main \
     --config "$CONFIG_FILE" \
     --voice --intent chat \
     2>/dev/null
 
+# App has exited - execution reaches here only after app closes
 echo -e "${BLUE}Robot session ended${NC}"
+
+# ============================================================================
+# START SCREENSAVER AFTER APP EXITS
+# ============================================================================
+# Now that the main app is done, start the screensaver for idle display
+if [ -f "$SCREENSAVER_SCRIPT" ]; then
+    echo -e "${BLUE}Starting screensaver daemon...${NC}"
+    "$SCREENSAVER_SCRIPT"
+else
+    echo -e "${YELLOW}⚠️  Screensaver script not found: $SCREENSAVER_SCRIPT${NC}"
+fi
+
