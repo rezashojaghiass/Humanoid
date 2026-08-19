@@ -72,13 +72,16 @@ def build_orchestrator(config_path: str) -> OrchestratorService:
         face = OpenCVLipSyncFaceAdapter(
             width=cfg["face"].get("width", 1280),
             height=cfg["face"].get("height", 800),
-            assets_path=cfg["face"].get("assets_path", "/home/reza/cropped_animation_frames_lipsync"),
+            assets_path=cfg["face"].get("assets_path", "/mnt/nvme/cropped_animation_frames_lipsync_3frames"),
+            full_assets_path=cfg["face"].get(
+                "full_assets_path", "/mnt/nvme/FacialAnimation/cropped_animation_frames_30frames_full"
+            ),
         )
     elif face_provider == "opencv_lcd":
         face = OpenCVLCDFaceAdapter(
             width=cfg["face"].get("width", 1280),
             height=cfg["face"].get("height", 800),
-            assets_path=cfg["face"].get("assets_path", "/home/reza/cropped_animation_frames"),
+            assets_path=cfg["face"].get("assets_path", "/mnt/nvme/cropped_animation_frames_lipsync_3frames"),
         )
     else:
         face = LCDStubFaceAdapter()

@@ -25,18 +25,20 @@ if multiprocessing.get_start_method(allow_none=True) != 'fork':
 
 def setup_logging():
     """Configure logging for real-time console output"""
-    # Configure root logger
+    # Configure root logger.
+    # WARNING keeps the internal logger.info() chatter (PyAudio init, stream
+    # open, byte counts) off the console. The user-facing print() lines are
+    # unaffected, and real warnings/errors still show.
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format='%(message)s',  # Simple format - just the message
         stream=sys.stdout,  # Output to stdout (unbuffered with -u flag)
         force=True
     )
-    
-    # Ensure all loggers use this configuration
+
     for logger_name in ['robot_sync_app', 'riva_speech', 'riva_mic_asr']:
         logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.WARNING)
         # Flush after each log
         for handler in logger.handlers:
             handler.flush()

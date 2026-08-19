@@ -629,12 +629,15 @@ class VoiceSessionService:
 
         turn = 0
         
-        # Map expressions to frame sequences - play all 30 frames
+        # Map expressions to frame sequences.
+        # Indices are positions in the loaded frame list, not filename numbers.
+        # Expression mode uses the full 30-frame set (face.full_assets_path),
+        # separate from the 3-frame set used for lip-sync.
         expression_frames = {
-            "happy": ("Smile", list(range(1, 31))),      # Frames 1-30
-            "sad": ("Sad", list(range(1, 31))),          # Frames 1-30
-            "surprised": ("Surprise", list(range(1, 31))), # Frames 1-30
-            "surprise": ("Surprise", list(range(1, 31))), # Frames 1-30
+            "happy": ("Smile", list(range(1, 31))),
+            "sad": ("Sad", list(range(1, 31))),
+            "surprised": ("Surprise", list(range(1, 31))),
+            "surprise": ("Surprise", list(range(1, 31))),
         }
 
         while True:

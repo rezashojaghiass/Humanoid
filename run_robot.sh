@@ -19,6 +19,11 @@ ROBOT_DIR="/home/reza/Humanoid"
 CONFIG_FILE="${ROBOT_DIR}/robot_sync_app/config/config_lipsync.yaml"
 PYTHON_PATH="${ROBOT_DIR}/robot_sync_app/src"
 
+# Force JetPack's OpenCV (4.5.4, GTK2) ahead of the pip builds on the NVMe
+# (4.6.0, QT5). The face adapter draws from a background thread; GTK allows
+# that, QT blocks on cv2.imshow forever -> face freezes on the first frame.
+SYSTEM_CV2="/usr/lib/python3.8/dist-packages"
+
 if [ ! -d "$ROBOT_DIR" ]; then
     echo -e "${RED}✗ Robot directory not found: $ROBOT_DIR${NC}"
     exit 1
@@ -59,10 +64,10 @@ echo ""
 # RUN THE MAIN APP - This blocks until app exits
 # ============================================================================
 cd "$ROBOT_DIR"
-PYTHONPATH="$PYTHON_PATH" python3 -m robot_sync_app.main \
+PYTHONPATH="$SYSTEM_CV2:$PYTHON_PATH" python3 -m robot_sync_app.main \
     --config "$CONFIG_FILE" \
     --voice --intent chat \
-    2>/dev/null
+    2> >(grep -vE "^ALSA lib|^Cannot connect to server|^jack server|^JackShmReadWritePtr" >&2)
 
 # App has exited - execution reaches here only after app closes
 echo -e "${BLUE}Robot session ended${NC}"

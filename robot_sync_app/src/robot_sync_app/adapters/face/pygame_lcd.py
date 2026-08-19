@@ -186,7 +186,7 @@ class PyGameLCDFaceAdapter(FacePort):
     """
 
     def __init__(self, width: int = 1280, height: int = 800, fullscreen: bool = True, 
-                 assets_path: str = "/home/reza/cropped_animation_frames"):
+                 assets_path: str = "/mnt/nvme/cropped_animation_frames_lipsync_3frames"):
         try:
             self.width = width
             self.height = height

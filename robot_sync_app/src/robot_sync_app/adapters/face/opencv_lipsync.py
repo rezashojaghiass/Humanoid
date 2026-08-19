@@ -18,22 +18,26 @@ class OpenCVLipSyncFaceAdapter(FacePort):
     """
 
     def __init__(self, width: int = 1280, height: int = 800,
-                 assets_path: str = "/home/reza/cropped_animation_frames_lipsync_3frames",
-                 enable_sleep_mode: bool = True):
+                 assets_path: str = "/mnt/nvme/cropped_animation_frames_lipsync_3frames",
+                 enable_sleep_mode: bool = True,
+                 full_assets_path: str = "/mnt/nvme/FacialAnimation/cropped_animation_frames_30frames_full"):
         """
         Initialize lip-sync face display.
-        
+
         Args:
             width: Display width in pixels
             height: Display height in pixels
-            assets_path: Path to lip-sync animation frames
+            assets_path: Path to lip-sync animation frames (3 per expression)
             enable_sleep_mode: If True, screen sleeps by default and wakes when robot runs
+            full_assets_path: Path to the full 30-frames-per-expression set used
+                by facial expression mode (separate from the 3-frame lip-sync set)
         """
         try:
             os.environ['DISPLAY'] = ':0'
             self.width = width
             self.height = height
             self.assets_path = assets_path
+            self.full_assets_path = full_assets_path
             self.enable_sleep_mode = enable_sleep_mode
             self.screen_awake = False
             
@@ -243,8 +247,8 @@ class OpenCVLipSyncFaceAdapter(FacePort):
     def _load_full_expression_frames(self) -> dict:
         """Pre-load all full expression frames (30 frames each) to eliminate disk I/O latency."""
         full_expressions = {}
-        full_assets_path = "/home/reza/cropped_animation_frames"
-        
+        full_assets_path = self.full_assets_path
+
         if not os.path.exists(full_assets_path):
             print(f"[FACE] Full expression frames path not found: {full_assets_path}")
             return full_expressions
